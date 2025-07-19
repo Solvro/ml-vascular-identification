@@ -1,6 +1,6 @@
 data/
 
-*.env
+.env
 envs/
 .envs/
 !.env.example
