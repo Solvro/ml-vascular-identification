@@ -1,0 +1,5 @@
+max_epochs: 50
+optimizer: {name: adamw, lr: 3e-4, weight_decay: 1e-4} # Optimizer configuration
+scheduler: {name: cosine, t_max: 50} # Learning rate scheduler configuration
+precision: 16-mixed # Mixed precision training
+seed: 1337 # Random seed for reproducibility

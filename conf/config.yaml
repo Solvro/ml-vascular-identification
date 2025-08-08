@@ -1,0 +1,8 @@
+defaults:
+  - data: dorsal        # mmcbnu
+  - model: resnet50
+  - loss: triplet_batchhard
+  - train: default 
+  - eval: default
+ # - index: faiss_gpu #TODO
+  - transforms: medium

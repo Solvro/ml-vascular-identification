@@ -1,26 +1,12 @@
+import timm
 
-from .vit import ViTEmbeddingModel
-from .cnn import CNNEmbeddingModel
+def get_backbone(name="resnet50", pretrained=True, in_chans=3):
+    """Create a timm backbone without a classifier.
 
-class ModelFactory:
+    Returns:
+        model: feature extractor (num_classes=0).
+        feat_dim: output feature dimensionality.
     """
-    Factory class for creating embedding models.
-    """
-    @staticmethod
-    def create(model_type: str, **kwargs) -> object:
-        """
-        Creates an embedding model based on the specified type.
-        Args:
-            model_type (str): Type of the model to create (e.g., 'cnn', 'vit').
-            **kwargs: Additional keyword arguments for the model constructor.
-        Returns:
-            An instance of the specified embedding model.
-        Raises:
-            ValueError: If the model type is unknown.
-        """
-        if model_type == "cnn":
-            return CNNEmbeddingModel(**kwargs)
-        elif model_type == "vit":
-            return ViTEmbeddingModel(**kwargs)
-        else:
-            raise ValueError(f"Unknown model type: {model_type}")
+    m = timm.create_model(name, pretrained=pretrained, num_classes=0, in_chans=in_chans)
+    feat_dim = m.num_features   # embedding size of the backbone
+    return m, feat_dim

@@ -1,0 +1,3 @@
+type: triplet # Triplet loss
+margin: 0.2  # Margin for triplet loss
+mining: batch_hard  # Mining strategy for triplet loss

@@ -1,0 +1,2 @@
+img_size: 256 # Image size for input images
+hflip_p: 0.5 # Probability of horizontal flipping

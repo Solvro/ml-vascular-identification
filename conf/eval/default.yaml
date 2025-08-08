@@ -1,0 +1,2 @@
+recall_at: [1, 5] # Recall at top 1 and 5 predictions
+distance: cosine  # Distance metric for evaluation

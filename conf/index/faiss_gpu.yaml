@@ -1,0 +1,5 @@
+engine: faiss #TODO
+gpu: true
+metric: cosine
+topk: 5
+save_dir: outputs/index
