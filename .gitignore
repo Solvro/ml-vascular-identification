@@ -1,6 +1,12 @@
-data/
-
 .env
 envs/
 .envs/
 !.env.example
+outputs/
+*.ckpt
+*.tfevents*
+*.parquet
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class

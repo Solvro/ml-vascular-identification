@@ -1,0 +1,7 @@
+name: dorsal
+root: "C:/Users/pawel/Desktop/Vain/Dorsal_Hand_Vein"
+split: {train: 0.7, val: 0.15, test: 0.15}
+batch_size: 48  # Samples per training batch. Larger => more VRAM, steadier gradients; smaller => faster iterations/less memory.
+num_workers: 4  # Data loader workers for parallel I/O. 0 disables multiprocessing; tune based on CPU/SSD speed.
+sampler: {P: 8, K: 4} # P: number of positive samples per batch; K: number of negative samples per batch.
+                      # Tip: Typically set batch_size == P*K (e.g., 8×6=48 or 12×4=48) to fill batches exactly.
