@@ -1,0 +1,11 @@
+engine: faiss
+gpu: false  # Use FAISS-CPU (index on CPU)
+metric: cosine  # Similarity; assumes L2-normalized embeddings
+split: train  # Which split to index
+save_dir: outputs/index
+
+device: cuda # Device for embedding extraction (model)
+batch_size: 16
+fp16: true  # Use half precision on CUDA
+
+# Note: gpu:false + device:cuda = FAISS on CPU, model on GPU.

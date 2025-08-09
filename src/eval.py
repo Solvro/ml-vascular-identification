@@ -4,7 +4,8 @@ import os
 import numpy as np
 from omegaconf import DictConfig
 import hydra
-import lightning as pl
+import lightning.pytorch as pl
+
 
 from data.datamodule import VascularDataModule
 from models.factory import get_backbone
@@ -35,19 +36,30 @@ def main(cfg: DictConfig):
     dm = VascularDataModule(cfg); dm.setup()
     
     bb, in_dim = get_backbone(cfg.model.backbone, cfg.model.pretrained, in_chans=3)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     net = EmbeddingModule(bb, in_dim, cfg.model.embed_dim,
                           bn=cfg.model.neck.bn, dropout=cfg.model.neck.dropout,
-                          normalize=True).eval().cuda()
+                          normalize=True).eval().to(device)
     
     # Pick best checkpoint by validation loss (fallback to 'last.ckpt').
     ckpt_dir = "outputs/checkpoints"
-    candidates = sorted(glob.glob(os.path.join(ckpt_dir, "*-val_loss=*.ckpt")), reverse=True)
-    ckpt_path = candidates[0] if candidates else os.path.join(ckpt_dir, "last.ckpt")
+    policy = getattr(cfg.eval, "ckpt", "best_r1")  # best_r1 | best_loss | last | <pełna_ścieżka>
 
-    if os.path.exists(ckpt_path):
+    ckpt_path = None
+    if os.path.isfile(policy):
+        ckpt_path = policy
+    elif policy == "best_r1":
+        candidates = sorted(glob.glob(os.path.join(ckpt_dir, "*-r1-*-*.ckpt")), reverse=True)
+        ckpt_path = candidates[0] if candidates else None
+    elif policy == "best_loss":
+        candidates = sorted(glob.glob(os.path.join(ckpt_dir, "*-loss-*-*.ckpt")), reverse=True)
+        ckpt_path = candidates[0] if candidates else None
+    elif policy == "last":
+        ckpt_path = os.path.join(ckpt_dir, "last.ckpt")
+
+    if ckpt_path and os.path.exists(ckpt_path):
         print(f"Loading checkpoint: {ckpt_path}")
         ckpt = torch.load(ckpt_path, map_location="cpu")
-        # Strip 'net.' prefix saved by Lightning.
         state = {k.replace("net.", ""): v for k, v in ckpt["state_dict"].items() if k.startswith("net.")}
         net.load_state_dict(state, strict=True)
     else:
@@ -57,7 +69,7 @@ def main(cfg: DictConfig):
     loader = dm.test_dataloader()
     with torch.no_grad():
         for x, y in loader:
-            z = net(x.cuda()).cpu()
+            z = net(x.to(device)).cpu()
             xs.append(z); ys.append(y)
             
     emb = torch.cat(xs, 0); labels = torch.cat(ys, 0)

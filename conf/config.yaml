@@ -4,5 +4,5 @@ defaults:
   - loss: triplet_batchhard
   - train: default 
   - eval: default
- # - index: faiss_gpu #TODO
+  - index: faiss_cpu # uv run python .\src\index\build_index.py data=dorsal eval.ckpt=last index.split=train
   - transforms: medium

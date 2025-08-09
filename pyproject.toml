@@ -21,6 +21,7 @@ dependencies = [
     "scikit-learn>=1.7.1",
     "pyarrow>=21.0.0",
     "tensorboard>=2.20.0",
+    "faiss-cpu>=1.11.0.post1",
 ]
 
 [build-system]
