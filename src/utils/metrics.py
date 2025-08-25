@@ -1,1 +1,0 @@
-# Recall@K, CMC, ROC-AUC, EER, mAP
