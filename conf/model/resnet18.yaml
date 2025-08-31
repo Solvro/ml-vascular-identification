@@ -1,0 +1,6 @@
+backbone: resnet18
+pretrained: true
+embed_dim: 256
+neck: { dropout: 0.1 }
+normalize: true
+in_chans: 3

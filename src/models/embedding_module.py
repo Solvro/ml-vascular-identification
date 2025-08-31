@@ -60,7 +60,9 @@ class LitEmbeddingModel(pl.LightningModule):
         x, y = batch
         z = self.forward(x)
         loss = self.loss_fn(z, y)
+        # Log with both slash-based and underscore-based keys for compatibility
         self.log("val/loss", loss, prog_bar=True)
+        self.log("val_loss", loss, prog_bar=True)
         self._val_embeds.append(z.detach().float().cpu())
         self._val_labels.append(y.detach().cpu())
 
@@ -77,7 +79,13 @@ class LitEmbeddingModel(pl.LightningModule):
         correct = (lab[topk] == lab.unsqueeze(1))
         for k in self._ks:
             r = correct[:, :k].any(dim=1).float().mean().item()
-            self.log(f"val/R@{k}", r, prog_bar=True)
+            # Dual-key logging to support safe filenames and UI grouping
+            if k == 1:
+                self.log("val_R1", r, prog_bar=True)
+                self.log("val/R@1", r, prog_bar=True)
+            elif k == 5:
+                self.log("val_R5", r, prog_bar=True)
+                self.log("val/R@5", r, prog_bar=True)
 
     def configure_optimizers(self):
         opt_name = str(getattr(self.cfg.train.optimizer, "name", "adamw")).lower()

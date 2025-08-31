@@ -1,5 +1,0 @@
-backbone: resnet50
-pretrained: true
-embed_dim: 256 # Dimension of the embedding space
-neck: {use: true, dropout: 0.1, bn: true} # Neck module configuration
-normalize: true # Whether to normalize the output embeddings

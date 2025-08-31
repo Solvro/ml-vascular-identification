@@ -1,0 +1,6 @@
+backbone: simple_cnn
+pretrained: false
+embed_dim: 256
+neck: { dropout: 0.0 }
+normalize: true
+in_chans: 3

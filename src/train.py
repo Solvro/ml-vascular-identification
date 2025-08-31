@@ -36,7 +36,7 @@ def main(cfg: DictConfig):
     )
 
     trainer = pl.Trainer(
-        accelerator="gpu" if pl.cuda.is_available() else "cpu",
+        accelerator="auto",
         devices=1,
         max_epochs=cfg.train.max_epochs,
         precision=cfg.train.precision,
