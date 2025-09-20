@@ -1,0 +1,56 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Ruff cache
+.ruff_cache/
+
+# Pre-commit
+.pre-commit-config-local.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data directories (keep structure but ignore contents)
+data/dorsal/*
+data/mmcbnu/*
+data/cache/*
+
+# Logs and outputs
+logs/
+outputs/
+checkpoints/
+wandb/
+*.log
+
+# Temporary files
+tmp/
+temp/
+.tmp
+
+# JetBrains IDEs
+.idea/
+
+#uv
+uv.lock

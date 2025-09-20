@@ -1,0 +1,55 @@
+defaults:
+  - data: dorsal  # dorsal | mmcbnu
+  - _self_
+
+# Training configuration
+model:
+  backbone: resnet50        # resnet50 | resnet18 | simple_cnn
+  embedding_dim: 512
+  pretrained: true
+  normalize: true
+  neck:
+    dropout: 0.1
+
+# Loss function
+loss:
+  name: triplet           # triplet | circle
+  margin: 0.3
+  hard_mining: true
+
+optimizer:
+  name: adamw
+  lr: 0.0003
+  weight_decay: 0.0001
+
+training:
+  epochs: 100
+  precision: '16-mixed'     # '32-true' | '16-mixed' | 'bf16-mixed'
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 1
+  log_every_n_steps: 20
+  val_check_interval: 1.0
+  early_stopping:
+    enabled: true
+    patience: 15
+
+scheduler:
+  name: cosine
+  t_max: 100
+
+sampler:
+  P: 8    # Number of classes (patients) per batch
+  K: 4    # Number of samples per class
+
+# Data loading
+batch_size: 64
+num_workers: 4
+
+# Logging
+logger:
+  name: tensorboard  # tensorboard | wandb
+  project: vascular_embedding
+
+# Reproducibility
+seed: 42
+deterministic: false

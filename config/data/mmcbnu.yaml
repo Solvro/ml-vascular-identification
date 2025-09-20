@@ -1,0 +1,17 @@
+# @package _global_
+defaults:
+  - _self_
+
+name: "mmcbnu"
+
+transforms:
+  img_size: 224  # Mniejszy rozmiar dla MMCBNU (więcej palców)
+  train: true
+  hflip_p: 0.3   # Mniejsza szansa na flip (palce mogą być asymetryczne)
+  normalize: imagenet
+
+split:
+  train: 0.6   # Więcej danych do testu (MMCBNU ma więcej variability)
+  val: 0.2
+  test: 0.2
+  seed: 42     # Inny seed dla różnorodności

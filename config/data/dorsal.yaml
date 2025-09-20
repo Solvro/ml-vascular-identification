@@ -1,0 +1,17 @@
+# @package _global_
+defaults:
+  - _self_
+
+name: "dorsal"
+
+transforms:
+  img_size: 256
+  train: true
+  hflip_p: 0.5
+  normalize: imagenet  # imagenet | none
+
+split:
+  train: 0.7
+  val: 0.15
+  test: 0.15
+  seed: 1337
