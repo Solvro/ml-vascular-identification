@@ -9,74 +9,11 @@ Example usage:
 """
 import hydra
 import torch
-import torch.nn as nn
 import torch.optim as optim
+from models import create_loss, create_model
 from omegaconf import DictConfig
 
 from data import create_data_loaders_from_config
-
-
-class SimpleEmbeddingModel(nn.Module):
-    """Simple CNN for embedding learning."""
-
-    def __init__(self, embedding_dim=256):
-        super().__init__()
-        self.backbone = nn.Sequential(
-            nn.Conv2d(3, 64, 7, stride=2, padding=3),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(3, stride=2, padding=1),
-            nn.Conv2d(64, 128, 3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-            nn.Conv2d(128, 256, 3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2),
-            nn.AdaptiveAvgPool2d(1),
-        )
-        self.head = nn.Linear(256, embedding_dim)
-
-    def forward(self, x):
-        x = self.backbone(x)
-        x = x.view(x.size(0), -1)
-        x = self.head(x)
-        return nn.functional.normalize(x, p=2, dim=1)
-
-
-class TripletLoss(nn.Module):
-    """Simple triplet loss."""
-
-    def __init__(self, margin=0.3):
-        super().__init__()
-        self.margin = margin
-
-    def forward(self, embeddings, labels):
-        """Compute batch hard triplet loss."""
-        # Compute pairwise distances
-        distances = torch.cdist(embeddings, embeddings, p=2)
-
-        # Create masks
-        labels = labels.unsqueeze(0)
-        pos_mask = (labels == labels.t()).float()
-        neg_mask = (labels != labels.t()).float()
-
-        # Remove diagonal
-        pos_mask.fill_diagonal_(0)
-
-        # Hard positive and hard negative mining
-        pos_dist = distances * pos_mask
-        neg_dist = (
-            distances * neg_mask + 1e6 * pos_mask
-        )  # Add large value to positive pairs
-
-        hard_pos = pos_dist.max(dim=1)[0]
-        hard_neg = neg_dist.min(dim=1)[0]
-
-        # Triplet loss
-        loss = torch.relu(hard_pos - hard_neg + self.margin)
-        return loss.mean()
 
 
 def train_epoch(model, train_loader, optimizer, criterion, device, epoch):
@@ -143,17 +80,34 @@ def train(cfg: DictConfig) -> None:
     print(f"   🎯 Sampling: {info['sampling']}")
 
     # Create model
-    embedding_dim = getattr(cfg.trainer, "embedding_dim", 256)
-    model = SimpleEmbeddingModel(embedding_dim=embedding_dim).to(device)
+    model_name = getattr(cfg.model, "name", "simple_cnn")
+    embedding_dim = getattr(cfg.model, "embedding_dim", 256)
+    input_channels = getattr(cfg.model, "input_channels", 3)
+    model = create_model(
+        model_name, embedding_dim=embedding_dim, input_channels=input_channels
+    ).to(device)
 
     # Loss and optimizer
-    criterion = TripletLoss(margin=0.3)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    loss_config = getattr(cfg.model, "loss", {})
+    loss_name = getattr(loss_config, "name", "triplet")
+    margin = getattr(loss_config, "margin", 0.3)
+
+    optimizer_config = getattr(cfg.model, "optimizer", {})
+    learning_rate = getattr(optimizer_config, "lr", 0.001)
+    weight_decay = getattr(optimizer_config, "weight_decay", 0.0001)
+
+    criterion = create_loss(loss_name, margin=margin)
+    optimizer = optim.Adam(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
 
     # Training parameters
     epochs = getattr(cfg.trainer, "epochs", 10)
 
-    print(f"🏗️  Model: {sum(p.numel() for p in model.parameters()):,} parameters")
+    model_info = model.get_model_info()
+    print(
+        f"🏗️  Model: {model_info['model_name']} ({model_info['total_parameters']:,} parameters)"
+    )
     print(f"🔄 Training for {epochs} epochs...")
 
     # Training loop

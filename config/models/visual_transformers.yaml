@@ -1,0 +1,25 @@
+# Visual Transformer Model Configuration
+# @package model
+
+name: vit_embedding
+type: visual_transformer
+architecture: vit_base
+
+# Model parameters
+embedding_dim: 768
+input_channels: 3
+patch_size: 16
+num_layers: 12
+num_heads: 12
+hidden_dim: 3072
+
+# Loss configuration
+loss:
+  name: triplet
+  margin: 0.2
+
+# Optimizer configuration
+optimizer:
+  name: adamw
+  lr: 0.0001
+  weight_decay: 0.01
