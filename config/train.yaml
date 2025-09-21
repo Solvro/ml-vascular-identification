@@ -1,3 +1,5 @@
 defaults:
   - data: dorsal  # dorsal | mmcbnu
+  - loader: default
+  - trainer: default
   - _self_

@@ -1,0 +1,8 @@
+# Data loading
+batch_size: 64
+num_workers: 4
+pin_memory: true
+
+sampler:
+  P: 8    # Number of classes (patients) per batch
+  K: 4    # Number of samples per class
