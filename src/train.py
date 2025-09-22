@@ -96,7 +96,7 @@ def train(cfg: DictConfig) -> None:
     learning_rate = getattr(optimizer_config, "lr", 0.001)
     weight_decay = getattr(optimizer_config, "weight_decay", 0.0001)
 
-    criterion = create_loss(loss_name, margin=margin)
+    criterion = create_loss(loss_name, margin=margin).to(device)
     optimizer = optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
