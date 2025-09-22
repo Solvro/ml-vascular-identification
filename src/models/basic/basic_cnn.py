@@ -56,13 +56,3 @@ class SimpleEmbeddingModel(BaseEmbeddingModel):
         x = x.view(x.size(0), -1)  # Flatten
         x = self.head(x)
         return F.normalize(x, p=2, dim=1)  # L2 normalization
-
-
-# Model configurations
-MODEL_CONFIGS = {
-    "simple_cnn": {
-        "class": SimpleEmbeddingModel,
-        "default_params": {"embedding_dim": 256, "input_channels": 3},
-        "description": "Simple CNN with 3 conv blocks and global average pooling",
-    }
-}
