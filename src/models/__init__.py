@@ -7,6 +7,7 @@ in vascular biometric identification tasks.
 from .base import BaseEmbeddingModel, BaseLoss, create_loss, create_model
 from .basic import SimpleEmbeddingModel
 from .losses import ContrastiveLoss, TripletLoss
+from .resnet import ResNet50Embedding, ResNetEmbedding
 from .unet import AttentionUNet, UNetEmbedding
 from .visual_trasformer import DeiTEmbedding, VisionTransformerEmbedding
 
@@ -19,6 +20,9 @@ __all__ = [
     "create_loss",
     # Basic CNN models
     "SimpleEmbeddingModel",
+    # ResNet models
+    "ResNetEmbedding",
+    "ResNet50Embedding",
     # U-Net models
     "UNetEmbedding",
     "AttentionUNet",

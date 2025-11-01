@@ -6,17 +6,17 @@ type: unet
 architecture: unet_basic
 
 # Model parameters
-embedding_dim: 512
+embedding_dim: 256
 input_channels: 3
 encoder_depth: 5
 
 # Loss configuration
 loss:
   name: triplet
-  margin: 0.5
+  margin: 0.3
 
 # Optimizer configuration
 optimizer:
   name: adam
-  lr: 0.0005
+  lr: 0.001
   weight_decay: 0.0001

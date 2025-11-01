@@ -1,0 +1,23 @@
+# ResNet Embedding Model Configuration
+# Configurable depth ResNet architecture optimized for vascular biometric identification
+# @package model
+
+name: resnet_embedding
+type: resnet
+architecture: resnet_16
+
+# Model parameters
+embedding_dim: 256        # Output embedding dimension (L2-normalized)
+num_blocks: 16            # Total number of residual blocks (distributed across 3 stages)
+input_channels: 3         # Input image channels (RGB)
+
+# Loss configuration
+loss:
+  name: triplet
+  margin: 0.3             # Triplet loss margin (optimal for this dataset)
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.001               # Learning rate
+  weight_decay: 0.0001    # L2 regularization weight

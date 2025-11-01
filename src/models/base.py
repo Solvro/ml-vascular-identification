@@ -96,6 +96,7 @@ def create_model(model_name: str, **kwargs) -> BaseEmbeddingModel:
     """
     # Import here to avoid circular imports
     from .basic import SimpleEmbeddingModel
+    from .resnet import ResNet50Embedding, ResNetEmbedding
     from .unet import AttentionUNet, UNetEmbedding
     from .visual_trasformer import DeiTEmbedding, VisionTransformerEmbedding
 
@@ -103,6 +104,9 @@ def create_model(model_name: str, **kwargs) -> BaseEmbeddingModel:
         # Basic CNN models
         "simple_cnn": SimpleEmbeddingModel,
         "simple_embedding": SimpleEmbeddingModel,  # alias
+        # ResNet models
+        "resnet_embedding": ResNetEmbedding,
+        "resnet50_embedding": ResNet50Embedding,
         # U-Net models
         "unet_embedding": UNetEmbedding,
         "attention_unet": AttentionUNet,
