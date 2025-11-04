@@ -1,7 +1,8 @@
 """
 Data module for vascular datasets.
 
-This module provides classes for handling dorsal and MMCBNU vascular datasets.
+This module provides classes for handling dorsal and MMCBNU vascular datasets,
+with support for both closed-set and open-set recognition.
 """
 from .base import (
     BaseDataset,
@@ -12,6 +13,7 @@ from .base import (
 from .data_loaders import (
     create_data_loaders,
     create_data_loaders_from_config,
+    create_openset_data_loaders,
     create_single_data_loader,
     get_dorsal_loaders,
     get_mmcbnu_loaders,
@@ -30,7 +32,12 @@ from .mmcbnu import (
     build_mmcbnu_manifest,
 )
 from .samplers import BalancedBatchSampler
-from .splits import make_patient_split
+from .splits import (
+    make_finger_class_split,
+    make_patient_split,
+    make_session_split,
+    verify_subject_disjoint,
+)
 from .transforms import (
     IMAGENET_MEAN,
     IMAGENET_STD,
@@ -45,12 +52,14 @@ __all__ = [
     "BaseDataset",
     "build_manifest_cache",
     "create_dataset_from_config",
-    # DataLoaders
+    # DataLoaders (Closed-set)
     "create_data_loaders",
     "create_data_loaders_from_config",
     "create_single_data_loader",
     "get_dorsal_loaders",
     "get_mmcbnu_loaders",
+    # DataLoaders (OpenSet)
+    "create_openset_data_loaders",
     # Dorsal dataset
     "DorsalScanner",
     "DorsalDataset",
@@ -64,6 +73,9 @@ __all__ = [
     "DEFAULT_CACHE_DIR",
     # Data utilities
     "make_patient_split",
+    "make_finger_class_split",
+    "make_session_split",
+    "verify_subject_disjoint",
     "build_transforms",
     "build_grayscale_transforms",
     "build_transforms_from_config",

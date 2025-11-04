@@ -51,6 +51,9 @@ class DorsalScanner(BaseScanner):
                 sdir = p_dir / side
                 if not sdir.exists():
                     continue
+                # Create unique hand-level class id: dorsal_<patient>_<side>
+                finger_class_id = f"dorsal_{pid}_{side}"
+
                 for f in sdir.iterdir():
                     if f.suffix.lower() not in [".png", ".jpg", ".jpeg", ".bmp"]:
                         continue
@@ -59,6 +62,7 @@ class DorsalScanner(BaseScanner):
                             "path": str(f),
                             "patient_id": pid,
                             "side": side,
+                            "finger_class_id": finger_class_id,
                             "dataset": "dorsal",
                         }
                     )
@@ -98,11 +102,21 @@ class DorsalDataset(BaseDataset):
         Returns:
             dict: Metadata with side information.
         """
-        return {
-            "side": row["side"],
+        metadata = {
+            "finger_class_id": row.get("finger_class_id"),
             "patient_id": row["patient_id"],
+            "side": row["side"],
+            "dataset": row.get("dataset", "dorsal"),
             "path": row["path"],
         }
+
+        # Include openset/session split markers if present in manifest
+        if "openset_split" in row:
+            metadata["openset_split"] = row["openset_split"]
+        if "sample_split" in row:
+            metadata["sample_split"] = row["sample_split"]
+
+        return metadata
 
 
 def build_dorsal_manifest() -> pd.DataFrame:

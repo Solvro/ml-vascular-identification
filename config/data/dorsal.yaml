@@ -15,3 +15,13 @@ split:
   val: 0.15
   test: 0.15
   seed: 1337
+
+# OpenSet settings tuned for dorsal (hand-level, few-shot per hand)
+openset:
+  enrollment_samples: 2
+  test_samples: 1
+  # Subject-level partition fractions (by patient):
+  # train_known: 0.55, val_known: 0.10, test_known: 0.05, unknown: 0.30
+  train_known_frac: 0.55
+  val_known_frac: 0.10
+  test_known_frac: 0.05

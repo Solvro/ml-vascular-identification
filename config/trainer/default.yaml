@@ -1,3 +1,7 @@
 # Training configuration
-embedding_dim: 256
-epochs: 50
+embedding_dim: 512  # Updated for improved model
+epochs: 100  # Increased for deeper network
+early_stopping:
+  enabled: true
+  patience: 15  # More patience for deeper network
+  min_delta: 0.0001  # Minimum improvement to count as progress

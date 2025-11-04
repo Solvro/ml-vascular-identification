@@ -56,6 +56,7 @@ class UNetEmbedding(BaseEmbeddingModel):
         input_channels: int = 3,
         encoder_depth: int = 5,
         base_channels: int = 64,
+        dropout: float = 0.1,
     ):
         super().__init__(embedding_dim)
 
@@ -78,7 +79,7 @@ class UNetEmbedding(BaseEmbeddingModel):
         self.head = nn.Sequential(
             nn.Linear(self.channels[-1], self.channels[-1] // 2),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
+            nn.Dropout(dropout),
             nn.Linear(self.channels[-1] // 2, embedding_dim),
         )
 
@@ -115,6 +116,7 @@ class AttentionUNet(BaseEmbeddingModel):
         input_channels: int = 3,
         encoder_depth: int = 4,
         base_channels: int = 64,
+        dropout: float = 0.1,
     ):
         super().__init__(embedding_dim)
 
@@ -145,7 +147,7 @@ class AttentionUNet(BaseEmbeddingModel):
         self.head = nn.Sequential(
             nn.Linear(self.channels[-1], embedding_dim),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
+            nn.Dropout(dropout),
             nn.Linear(embedding_dim, embedding_dim),
         )
 

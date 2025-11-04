@@ -1,0 +1,25 @@
+# U-Net Model with Contrastive Loss
+# @package model
+
+name: unet_embedding
+type: unet
+architecture: unet_basic
+
+# Model parameters
+embedding_dim: 512
+input_channels: 3
+encoder_depth: 5
+dropout: 0.1
+
+# Loss configuration - Contrastive Loss
+loss:
+  name: contrastive
+  margin: 1.0          # Margin for negative pairs (range: 0.5-2.0)
+  pos_weight: 1.0      # Weight for positive pair loss
+  neg_weight: 1.0      # Weight for negative pair loss
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.0005
+  weight_decay: 0.0001

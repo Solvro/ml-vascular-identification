@@ -1,0 +1,23 @@
+# Basic CNN Model Configuration (Improved)
+# @package model
+
+name: simple_cnn
+type: basic
+architecture: basic_cnn
+
+# Model parameters (moderately improved for better discrimination)
+embedding_dim: 384  # Moderate increase from 256 (0.91 dim/class)
+input_channels: 3
+dropout: 0.2  # Moderate regularization
+use_attention: false  # Disable attention for simpler training
+
+# Loss configuration
+loss:
+  name: triplet
+  margin: 0.5
+
+# Optimizer configuration (adjusted for improved model)
+optimizer:
+  name: adam
+  lr: 0.0001  # Much lower for deeper network with residuals
+  weight_decay: 0.0005  # Increased regularization

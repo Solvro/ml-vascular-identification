@@ -4,3 +4,17 @@ defaults:
   - trainer: default
   - model: basic
   - _self_
+
+# OpenSet configuration
+mode: openset  # openset | closedset
+known_ratio: 0.7
+val_ratio: 0.15
+seed: 42
+
+# Threshold optimization
+optimize_threshold: true  # Automatically find optimal threshold on validation
+threshold_metric: oscr  # oscr | auroc
+openset_threshold: 0.5  # Fixed threshold if optimize_threshold=false
+
+# k-NN configuration
+k_neighbors: 1  # Number of neighbors for k-NN (1=1-NN, 3=3-NN, etc.)
