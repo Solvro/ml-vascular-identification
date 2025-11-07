@@ -115,7 +115,7 @@ def make_finger_class_split(
         n_known_patients = int(n_patients * known_ratio)
 
         known_patients = set(patients[:n_known_patients])
-        unknown_patients = set(patients[n_known_patients:])
+        unknown_patients = set(patients[n_known_patients:])  # noqa: F841
 
         # Assign openset_split based on patient
         df["openset_split"] = df["patient_id"].apply(
@@ -131,7 +131,7 @@ def make_finger_class_split(
         n_val_classes = int(n_known_classes * val_ratio)
 
         train_finger_classes = set(known_finger_classes[n_val_classes:])
-        val_finger_classes = set(known_finger_classes[:n_val_classes])
+        val_finger_classes = set(known_finger_classes[:n_val_classes])  # noqa: F841
 
         def assign_split(row):
             if row["openset_split"] == "unknown":
@@ -152,7 +152,7 @@ def make_finger_class_split(
         n_known_classes = int(n_classes * known_ratio)
 
         known_classes = set(finger_classes[:n_known_classes])
-        unknown_classes = set(finger_classes[n_known_classes:])
+        unknown_classes = set(finger_classes[n_known_classes:])  # noqa: F841
 
         df["openset_split"] = df["finger_class_id"].apply(
             lambda fc: "known" if fc in known_classes else "unknown"
@@ -226,6 +226,18 @@ def make_session_split(
     rng = np.random.default_rng(seed)
     df = df.copy()
 
+    # If finger_class_id doesn't exist, try to create it from side or patient_id
+    if "finger_class_id" not in df.columns:
+        if "side" in df.columns and "patient_id" in df.columns:
+            # For dorsal-like datasets with patient_id and side columns
+            df["finger_class_id"] = (
+                df["patient_id"].astype(str) + "_" + df["side"].astype(str)
+            )
+        else:
+            raise ValueError(
+                "DataFrame must have 'finger_class_id' column or 'patient_id'/'side' columns"
+            )
+
     sample_splits = []
 
     for finger_class_id in df["finger_class_id"].unique():
@@ -249,7 +261,7 @@ def make_session_split(
                 sample_splits.append((idx, "test"))
 
     # Create a mapping
-    split_map = {idx: split for idx, split in sample_splits}
+    split_map = dict(sample_splits)  # noqa: C416
     df["sample_split"] = df.index.map(split_map)
 
     return df
@@ -289,22 +301,29 @@ def verify_subject_disjoint(df: pd.DataFrame) -> dict:
         "total_patients": len(df["patient_id"].unique()),
         "known_patients": len(known_patients),
         "unknown_patients": len(unknown_patients),
-        "total_finger_classes": df["finger_class_id"].nunique(),
-        "known_finger_classes": known_df["finger_class_id"].nunique(),
-        "unknown_finger_classes": unknown_df["finger_class_id"].nunique(),
-        "splits": {},
     }
+
+    # Only add finger_class statistics if column exists
+    if "finger_class_id" in df.columns:
+        stats["total_finger_classes"] = df["finger_class_id"].nunique()
+        stats["known_finger_classes"] = known_df["finger_class_id"].nunique()
+        stats["unknown_finger_classes"] = unknown_df["finger_class_id"].nunique()
+
+    stats["splits"] = {}
 
     # Per-split statistics
     for split_name in df["split"].unique():
         split_df = df[df["split"] == split_name]
-        stats["splits"][split_name] = {
+        split_stats = {
             "samples": len(split_df),
             "patients": split_df["patient_id"].nunique(),
-            "finger_classes": split_df["finger_class_id"].nunique(),
             "openset_split": split_df["openset_split"].iloc[0]
             if len(split_df) > 0
             else None,
         }
+        # Only add finger_classes if column exists
+        if "finger_class_id" in df.columns:
+            split_stats["finger_classes"] = split_df["finger_class_id"].nunique()
+        stats["splits"][split_name] = split_stats
 
     return stats
