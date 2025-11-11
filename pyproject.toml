@@ -20,6 +20,7 @@ dependencies = [
     "omegaconf>=2.3.0",
     "scikit-learn>=1.0.0", # for metrics computation
     "matplotlib>=3.5.0", # for visualization
+    "opencv-python>=4.5.0", # for image processing and ROI extraction
 ]
 
 [project.optional-dependencies]

@@ -5,8 +5,8 @@ Provides functions to create PyTorch DataLoaders with proper splits and sampling
 """
 from typing import Dict, Tuple
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from torch.utils.data import DataLoader
 
 from .base import BaseDataset
@@ -160,9 +160,14 @@ def create_data_loaders(
         df_with_splits[df_with_splits.split == "test"].copy().reset_index(drop=True)
     )
 
-    # Create transforms
-    train_transform = build_transforms(img_size=img_size, train=True, hflip_p=hflip_p)
-    eval_transform = build_transforms(img_size=img_size, train=False)
+    # Create transforms (with ROI extraction for dorsal)
+    roi_extraction = dataset_name == "dorsal"
+    train_transform = build_transforms(
+        img_size=img_size, train=True, hflip_p=hflip_p, roi_extraction=roi_extraction
+    )
+    eval_transform = build_transforms(
+        img_size=img_size, train=False, roi_extraction=roi_extraction
+    )
 
     # Create datasets for each split
     train_dataset = create_dataset_from_name(
@@ -390,7 +395,11 @@ def create_openset_data_loaders(
         >>> test_unknown_loader = loaders['test_unknown']
         >>> print(f"Known classes: {info['known_finger_classes']}")
     """
-    from .splits import make_finger_class_split, make_session_split, verify_subject_disjoint
+    from .splits import (
+        make_finger_class_split,
+        make_session_split,
+        verify_subject_disjoint,
+    )
 
     # Load full dataset and create subject-level openset splits.
     if dataset_name == "mmcbnu":
@@ -431,14 +440,13 @@ def create_openset_data_loaders(
         n_train = int(n * 0.55)
         n_val = int(n * 0.10)
         n_test_known = int(n * 0.05)
-        # Rest become unknown
-        n_assigned = n_train + n_val + n_test_known
-        n_unknown = max(0, n - n_assigned)
+        # Rest become unknown: n_unknown = max(0, n - (n_train + n_val + n_test_known))
 
         # Assign patient groups
-        train_patients = set(patients[:n_train])
         val_patients = set(patients[n_train : n_train + n_val])
-        test_known_patients = set(patients[n_train + n_val : n_train + n_val + n_test_known])
+        test_known_patients = set(
+            patients[n_train + n_val : n_train + n_val + n_test_known]
+        )
         unknown_patients = set(patients[n_train + n_val + n_test_known :])
 
         # Create openset_split and split columns (subject-disjoint)
@@ -473,21 +481,19 @@ def create_openset_data_loaders(
             seed=seed,
         )
     else:
-        raise ValueError(f"Dataset {dataset_name} not supported yet. Use 'mmcbnu' or 'dorsal'.")
+        raise ValueError(
+            f"Dataset {dataset_name} not supported yet. Use 'mmcbnu' or 'dorsal'."
+        )
 
     # Step 3: Create DataFrames for each split
     # Train: known classes, all samples (or enrollment samples)
     train_df = (
-        df_complete[(df_complete["split"] == "train")]
-        .copy()
-        .reset_index(drop=True)
+        df_complete[(df_complete["split"] == "train")].copy().reset_index(drop=True)
     )
 
     # Val: known classes, all samples
     val_known_df = (
-        df_complete[(df_complete["split"] == "val")]
-        .copy()
-        .reset_index(drop=True)
+        df_complete[(df_complete["split"] == "val")].copy().reset_index(drop=True)
     )
 
     # Test known enrollment: known classes, enrollment samples (for prototypes)
@@ -499,7 +505,7 @@ def create_openset_data_loaders(
         .copy()
         .reset_index(drop=True)
     )
-    
+
     # Test known query: known classes, test samples (for querying against prototypes)
     test_known_query_df = (
         df_complete[
@@ -512,14 +518,17 @@ def create_openset_data_loaders(
 
     # Test unknown: unknown classes, all samples
     test_unknown_df = (
-        df_complete[(df_complete["split"] == "test")]
-        .copy()
-        .reset_index(drop=True)
+        df_complete[(df_complete["split"] == "test")].copy().reset_index(drop=True)
     )
 
-    # Step 4: Create transforms
-    train_transform = build_transforms(img_size=img_size, train=True, hflip_p=hflip_p)
-    eval_transform = build_transforms(img_size=img_size, train=False)
+    # Step 4: Create transforms (with ROI extraction for dorsal)
+    roi_extraction = dataset_name == "dorsal"
+    train_transform = build_transforms(
+        img_size=img_size, train=True, hflip_p=hflip_p, roi_extraction=roi_extraction
+    )
+    eval_transform = build_transforms(
+        img_size=img_size, train=False, roi_extraction=roi_extraction
+    )
 
     # Step 5: Build global label encoder for ALL finger classes
     all_finger_classes = sorted(df_complete["finger_class_id"].unique())
@@ -553,7 +562,7 @@ def create_openset_data_loaders(
     )
     test_known_enrollment_dataset.use_finger_classes = True
     test_known_enrollment_dataset.id_column = "finger_class_id"
-    
+
     # Test known query dataset (for testing against prototypes)
     test_known_query_dataset = create_dataset_from_name(
         dataset_name,
@@ -603,7 +612,7 @@ def create_openset_data_loaders(
         pin_memory=pin_memory,
         persistent_workers=num_workers > 0,
     )
-    
+
     test_known_query_loader = DataLoader(
         test_known_query_dataset,
         batch_size=batch_size,
