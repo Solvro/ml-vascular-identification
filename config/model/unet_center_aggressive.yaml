@@ -1,4 +1,4 @@
-# U-Net Model Configuration
+# U-Net Model - Triplet Center Loss Variant (aggressive)
 # @package model
 
 name: unet_embedding
@@ -12,10 +12,13 @@ encoder_depth: 4
 base_channels: 64
 dropout: 0.1
 
-# Loss configuration - Center loss for tight clustering (UNet encoder already learns good features)
+# Loss configuration - Aggressive triplet_center (more center loss weight)
 loss:
-  name: center
-  lambda_center: 0.001
+  name: triplet_center
+  margin: 0.3
+  mining: hard
+  lambda_triplet: 0.5
+  lambda_center: 0.005  # Stronger center regularization
 
 # Optimizer configuration
 optimizer:

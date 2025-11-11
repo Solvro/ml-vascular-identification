@@ -15,8 +15,6 @@ class BaseEmbeddingModel(nn.Module, ABC):
     """Abstract base class for embedding models.
 
     Defines the interface that all embedding models should implement.
-    Supports both training mode (L2-normalized embeddings) and inference mode
-    (can use cosine similarity head for classification).
     """
 
     def __init__(self, embedding_dim: int = 256):
@@ -32,10 +30,6 @@ class BaseEmbeddingModel(nn.Module, ABC):
 
         Returns:
             Normalized embedding tensor of shape (batch_size, embedding_dim).
-            
-        Note:
-            Embeddings should be L2-normalized for metric learning with
-            triplet/contrastive loss.
         """
         pass
 
@@ -54,17 +48,6 @@ class BaseEmbeddingModel(nn.Module, ABC):
             "total_parameters": total_params,
             "trainable_parameters": trainable_params,
         }
-    
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
-        """Alias for forward pass - extract embeddings.
-        
-        Args:
-            x: Input tensor of shape (batch_size, channels, height, width).
-            
-        Returns:
-            Normalized embedding tensor of shape (batch_size, embedding_dim).
-        """
-        return self.forward(x)
 
 
 class BaseLoss(nn.Module, ABC):
@@ -113,8 +96,8 @@ def create_model(model_name: str, **kwargs) -> BaseEmbeddingModel:
     """
     # Import here to avoid circular imports
     from .basic import SimpleEmbeddingModel
+    from .resnet_cbam import ResNet50CBAM, ResNetCBAM
     from .unet import AttentionUNet, UNetEmbedding
-    from .visual_trasformer import DeiTEmbedding, VisionTransformerEmbedding
 
     models = {
         # Basic CNN models
@@ -123,9 +106,9 @@ def create_model(model_name: str, **kwargs) -> BaseEmbeddingModel:
         # U-Net models
         "unet_embedding": UNetEmbedding,
         "attention_unet": AttentionUNet,
-        # Vision Transformer models
-        "vit_embedding": VisionTransformerEmbedding,
-        "deit_embedding": DeiTEmbedding,
+        # ResNet with CBAM models
+        "resnet_cbam": ResNetCBAM,
+        "resnet50_cbam": ResNet50CBAM,
     }
 
     if model_name not in models:
@@ -149,13 +132,17 @@ def create_loss(loss_name: str, **kwargs) -> BaseLoss:
         ValueError: If loss_name is not recognized.
     """
     # Import here to avoid circular imports
-    from .losses import ContrastiveLoss, TripletLoss
+    from .losses import CenterLoss, ContrastiveLoss, TripletCenterLoss, TripletLoss
 
     losses = {
         "triplet": TripletLoss,
         "triplet_loss": TripletLoss,  # alias
         "contrastive": ContrastiveLoss,
         "contrastive_loss": ContrastiveLoss,  # alias
+        "center": CenterLoss,
+        "center_loss": CenterLoss,  # alias
+        "triplet_center": TripletCenterLoss,
+        "triplet_center_loss": TripletCenterLoss,  # alias
     }
 
     if loss_name not in losses:
@@ -163,84 +150,3 @@ def create_loss(loss_name: str, **kwargs) -> BaseLoss:
         raise ValueError(f"Unknown loss: {loss_name}. Available: {available}")
 
     return losses[loss_name](**kwargs)
-
-
-class CosineClassifier(nn.Module):
-    """Cosine similarity classifier with learnable temperature.
-    
-    Used for validation and inference in OpenSet recognition.
-    Computes cosine similarity between embeddings and class prototypes,
-    scaled by a learnable temperature parameter.
-    
-    For OpenSet:
-    - During validation: classify to known classes with temperature scaling
-    - During inference: compute similarity to prototypes + threshold for rejection
-    """
-    
-    def __init__(
-        self,
-        embedding_dim: int,
-        num_classes: int,
-        temperature: float = 0.07,
-        learnable_temperature: bool = True,
-    ):
-        """Initialize cosine classifier.
-        
-        Args:
-            embedding_dim: Dimension of input embeddings.
-            num_classes: Number of classes (known finger classes).
-            temperature: Initial temperature value (lower = sharper distribution).
-            learnable_temperature: If True, temperature is learned during training.
-        """
-        super().__init__()
-        self.embedding_dim = embedding_dim
-        self.num_classes = num_classes
-        
-        # Learnable class prototypes (will be normalized)
-        self.weight = nn.Parameter(torch.randn(num_classes, embedding_dim))
-        nn.init.xavier_uniform_(self.weight)
-        
-        # Temperature parameter
-        if learnable_temperature:
-            self.temperature = nn.Parameter(torch.tensor(temperature))
-        else:
-            self.register_buffer('temperature', torch.tensor(temperature))
-        
-        self.learnable_temperature = learnable_temperature
-    
-    def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
-        """Compute cosine similarities scaled by temperature.
-        
-        Args:
-            embeddings: L2-normalized embeddings of shape (batch_size, embedding_dim).
-            
-        Returns:
-            Logits of shape (batch_size, num_classes).
-        """
-        # Normalize weight vectors (class prototypes)
-        normalized_weight = nn.functional.normalize(self.weight, p=2, dim=1)
-        
-        # Compute cosine similarity
-        # embeddings: (batch_size, embedding_dim)
-        # normalized_weight.T: (embedding_dim, num_classes)
-        # Result: (batch_size, num_classes)
-        cosine_sim = torch.matmul(embeddings, normalized_weight.t())
-        
-        # Scale by temperature
-        logits = cosine_sim / self.temperature
-        
-        return logits
-    
-    def get_similarities(self, embeddings: torch.Tensor) -> torch.Tensor:
-        """Get raw cosine similarities without temperature scaling.
-        
-        Useful for threshold-based rejection in OpenSet inference.
-        
-        Args:
-            embeddings: L2-normalized embeddings of shape (batch_size, embedding_dim).
-            
-        Returns:
-            Cosine similarities of shape (batch_size, num_classes).
-        """
-        normalized_weight = nn.functional.normalize(self.weight, p=2, dim=1)
-        return torch.matmul(embeddings, normalized_weight.t())

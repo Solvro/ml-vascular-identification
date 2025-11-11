@@ -1,4 +1,4 @@
-# Basic CNN Model - Contrastive Loss Variant
+# Basic CNN Model - Triplet Loss Baseline
 # @package model
 
 name: simple_cnn
@@ -11,12 +11,11 @@ input_channels: 3
 dropout: 0.2
 use_attention: false
 
-# Loss configuration - Contrastive loss (pair-wise learning)
+# Loss configuration - Standard triplet loss (baseline)
 loss:
-  name: contrastive
-  margin: 1.0
-  pos_weight: 1.0
-  neg_weight: 1.0
+  name: triplet
+  margin: 0.3
+  mining: hard
 
 # Optimizer configuration
 optimizer:

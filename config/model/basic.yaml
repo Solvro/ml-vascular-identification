@@ -11,13 +11,17 @@ input_channels: 3
 dropout: 0.2  # Moderate regularization
 use_attention: false  # Disable attention for simpler training
 
-# Loss configuration
+# Loss configuration - TripletCenter for OpenSet (tight clustering + discrimination)
 loss:
-  name: triplet
-  margin: 0.5
+  name: triplet_center
+  margin: 0.3  # Triplet margin (0.2-0.3 for biometrics)
+  mining: hard
+  lambda_triplet: 1.0
+  lambda_center: 0.001  # Center loss weight
 
 # Optimizer configuration (adjusted for improved model)
 optimizer:
   name: adam
   lr: 0.0001  # Much lower for deeper network with residuals
   weight_decay: 0.0005  # Increased regularization
+

@@ -1,6 +1,6 @@
 # Data loading
 batch_size: 64
-num_workers: 4
+num_workers: 12  # Reduced from 4 to avoid deadlocks
 pin_memory: true
 
 sampler:

@@ -15,7 +15,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from models import CosineClassifier, create_loss, create_model, compute_openset_metrics
+from models import create_loss, create_model, compute_openset_metrics
 from omegaconf import DictConfig
 
 from data import create_data_loaders_from_config, create_openset_data_loaders
@@ -82,7 +82,10 @@ def evaluate_metric_learning(model, val_loader, criterion, device):
     total_loss = 0
     num_batches = len(val_loader)
 
-    for images, labels, _ in val_loader:
+    print(f"Starting validation ({num_batches} batches)...", flush=True)
+    for batch_idx, (images, labels, _) in enumerate(val_loader):
+        if batch_idx % 5 == 0:
+            print(f"  Validation batch {batch_idx}/{num_batches}", flush=True)
         images, labels = images.to(device), labels.to(device)
         embeddings = model(images)
         loss = criterion(embeddings, labels)
@@ -524,6 +527,20 @@ def train(cfg: DictConfig) -> None:
         loss_kwargs["pos_weight"] = loss_config.pos_weight
     if hasattr(loss_config, "neg_weight"):
         loss_kwargs["neg_weight"] = loss_config.neg_weight
+    if hasattr(loss_config, "lambda_center"):
+        loss_kwargs["lambda_center"] = loss_config.lambda_center
+    if hasattr(loss_config, "lambda_triplet"):
+        loss_kwargs["lambda_triplet"] = loss_config.lambda_triplet
+    
+    # For center-based losses, need to pass embedding_dim and num_classes
+    if loss_name in ["center", "center_loss", "triplet_center", "triplet_center_loss"]:
+        loss_kwargs["embedding_dim"] = embedding_dim
+        # Use number of known classes (for OpenSet) or total training classes
+        if mode == "openset":
+            loss_kwargs["num_classes"] = info.get("known_finger_classes", 100)
+        else:
+            # For closed-set, count unique labels in training set
+            loss_kwargs["num_classes"] = len(train_loader.dataset.classes) if hasattr(train_loader.dataset, 'classes') else 100
 
     optimizer_config = getattr(cfg.model, "optimizer", {})
     learning_rate = getattr(optimizer_config, "lr", 3e-4)

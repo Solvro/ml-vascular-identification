@@ -1,0 +1,27 @@
+# ResNet-50 with CBAM (Channel & Spatial Attention)
+# @package model
+# SOTA for vascular biometrics: combines ResNet hierarchy with attention mechanism
+
+name: resnet50_cbam
+type: resnet_cbam
+architecture: resnet50_cbam
+
+# Model parameters
+embedding_dim: 256
+input_channels: 3
+dropout: 0.4  # Aggressive dropout for regularization
+depth: 50
+use_cbam: true
+
+# Loss configuration - Standard triplet loss (baseline)
+loss:
+  name: triplet
+  margin: 0.3
+  mining: hard
+
+# Optimizer configuration - REDUCED learning rate
+optimizer:
+  name: adam
+  lr: 0.00005  # Reduced from 0.0001 - ResNet needs lower LR
+  weight_decay: 0.0005
+

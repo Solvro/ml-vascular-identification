@@ -1,0 +1,28 @@
+# Attention U-Net Model Configuration
+# @package model
+
+name: attention_unet
+type: attention_unet
+architecture: attention_unet
+
+# Model parameters
+embedding_dim: 512
+input_channels: 3
+encoder_depth: 4
+base_channels: 64
+dropout: 0.1
+
+# Loss configuration - TripletCenter (best for attention mechanism with OpenSet)
+loss:
+  name: triplet_center
+  margin: 0.3
+  mining: hard
+  lambda_triplet: 1.0
+  lambda_center: 0.001
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.0001
+  weight_decay: 0.0005
+
