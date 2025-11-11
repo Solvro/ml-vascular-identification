@@ -49,7 +49,7 @@ def test_roi_extraction(roi_enabled):
         seed=42,
         P=8,
         K=4,
-        num_workers=2,
+        num_workers=0,  # Use 0 to avoid pickling issues with lambda in transforms
         batch_size=32,
         hflip_p=0.3,
     )
@@ -76,8 +76,11 @@ def test_roi_extraction(roi_enabled):
 
     # Check image sizes (after ROI if enabled)
     print("\n📐 Sample metadata:")
-    for i in range(min(3, len(metadata))):
-        print(f"  Sample {i}: {metadata[i]}")
+    for i in range(min(3, len(metadata["patient_id"]))):
+        print(
+            f"  Sample {i}: patient={metadata['patient_id'][i]}, "
+            + f"side={metadata['side'][i] if 'side' in metadata else 'N/A'}"
+        )
 
     return {
         "roi_enabled": roi_enabled,
