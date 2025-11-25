@@ -11,22 +11,25 @@ from torch.utils.data import DataLoader
 
 from .base import BaseDataset
 from .dorsal import DorsalDataset
+from .fyo import FYODataset
 from .mmcbnu import MMCBNUDataset
 from .samplers import BalancedBatchSampler
 from .splits import make_patient_split
 from .transforms import build_transforms
+from .utfvp import UTFVPDataset
 
 
 def create_dataset_from_name(
-    name: str, df: pd.DataFrame, transform=None, label_encoder=None
+    name: str, df: pd.DataFrame, transform=None, label_encoder=None, **kwargs
 ) -> BaseDataset:
     """Create dataset instance from name.
 
     Args:
-        name: Dataset name ('dorsal' or 'mmcbnu').
+        name: Dataset name ('dorsal', 'mmcbnu', 'fyo', 'utfvp').
         df: DataFrame with samples.
         transform: Optional transform.
         label_encoder: Optional label encoder.
+        **kwargs: Additional dataset-specific arguments (e.g., body_part for FYO).
 
     Returns:
         Dataset instance.
@@ -35,6 +38,13 @@ def create_dataset_from_name(
         return DorsalDataset(df=df, transform=transform, label_encoder=label_encoder)
     elif name == "mmcbnu":
         return MMCBNUDataset(df=df, transform=transform, label_encoder=label_encoder)
+    elif name == "fyo":
+        body_part = kwargs.get("body_part", "dorsal")
+        return FYODataset(
+            body_part=body_part, df=df, transform=transform, label_encoder=label_encoder
+        )
+    elif name == "utfvp":
+        return UTFVPDataset(df=df, transform=transform, label_encoder=label_encoder)
     else:
         raise ValueError(f"Unknown dataset: {name}")
 
@@ -336,6 +346,24 @@ def get_mmcbnu_loaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader, Di
     return create_data_loaders("mmcbnu", **kwargs)
 
 
+def get_fyo_loaders(
+    body_part: str = "dorsal", **kwargs
+) -> Tuple[DataLoader, DataLoader, DataLoader, Dict]:
+    """Get FYO train/val/test loaders with default parameters.
+
+    Args:
+        body_part: Body part to use: 'dorsal', 'palm', 'wrist', or 'all'.
+        **kwargs: Additional arguments for create_data_loaders.
+    """
+    # Note: create_data_loaders needs to be updated to support body_part
+    return create_data_loaders("fyo", body_part=body_part, **kwargs)
+
+
+def get_utfvp_loaders(**kwargs) -> Tuple[DataLoader, DataLoader, DataLoader, Dict]:
+    """Get UTFVP train/val/test loaders with default parameters."""
+    return create_data_loaders("utfvp", **kwargs)
+
+
 def create_openset_data_loaders(
     dataset_name: str = "mmcbnu",
     img_size: int = 224,
@@ -354,6 +382,8 @@ def create_openset_data_loaders(
     batch_size: int = 64,
     # Transform params
     hflip_p: float = 0.3,
+    # Dataset-specific params
+    body_part: str = "dorsal",
 ) -> Tuple[Dict[str, DataLoader], Dict]:
     """Create DataLoaders for OpenSet Recognition with subject-disjoint splits.
 
@@ -480,9 +510,115 @@ def create_openset_data_loaders(
             test_samples=test_samples,
             seed=seed,
         )
+    elif dataset_name == "fyo":
+        # FYO: multi-body-part dataset. Use subject-level partition.
+        full_dataset = FYODataset(body_part=body_part)
+        df = full_dataset.df.copy()
+
+        # Get unique patients and shuffle
+        patients = sorted(df["patient_id"].unique().tolist())
+        rng = np.random.default_rng(seed)
+        rng.shuffle(patients)
+
+        n = len(patients)
+        n_train = int(n * 0.55)
+        n_val = int(n * 0.10)
+        n_test_known = int(n * 0.05)
+
+        # Assign patient groups
+        val_patients = set(patients[n_train : n_train + n_val])
+        test_known_patients = set(
+            patients[n_train + n_val : n_train + n_val + n_test_known]
+        )
+        unknown_patients = set(patients[n_train + n_val + n_test_known :])
+
+        # Create openset_split and split columns (subject-disjoint)
+        def _assign_patient_split_fyo(pid):
+            if pid in unknown_patients:
+                return ("unknown", "test")
+            elif pid in test_known_patients:
+                return ("known", "test")
+            elif pid in val_patients:
+                return ("known", "val")
+            else:
+                return ("known", "train")
+
+        openset_splits = []
+        splits = []
+        for pid in df["patient_id"]:
+            o, s = _assign_patient_split_fyo(pid)
+            openset_splits.append(o)
+            splits.append(s)
+
+        df["openset_split"] = openset_splits
+        df["split"] = splits
+
+        # Verify subject-disjoint
+        split_stats = verify_subject_disjoint(df)
+
+        # Step 2: Create enrollment/test sample splits
+        df_complete = make_session_split(
+            df,
+            enrollment_samples=enrollment_samples,
+            test_samples=test_samples,
+            seed=seed,
+        )
+    elif dataset_name == "utfvp":
+        # UTFVP: multi-session finger vein dataset. Use subject-level partition.
+        full_dataset = UTFVPDataset()
+        df = full_dataset.df.copy()
+
+        # Get unique patients and shuffle
+        patients = sorted(df["patient_id"].unique().tolist())
+        rng = np.random.default_rng(seed)
+        rng.shuffle(patients)
+
+        n = len(patients)
+        n_train = int(n * 0.55)
+        n_val = int(n * 0.10)
+        n_test_known = int(n * 0.05)
+
+        # Assign patient groups
+        val_patients = set(patients[n_train : n_train + n_val])
+        test_known_patients = set(
+            patients[n_train + n_val : n_train + n_val + n_test_known]
+        )
+        unknown_patients = set(patients[n_train + n_val + n_test_known :])
+
+        # Create openset_split and split columns (subject-disjoint)
+        def _assign_patient_split_utfvp(pid):
+            if pid in unknown_patients:
+                return ("unknown", "test")
+            elif pid in test_known_patients:
+                return ("known", "test")
+            elif pid in val_patients:
+                return ("known", "val")
+            else:
+                return ("known", "train")
+
+        openset_splits = []
+        splits = []
+        for pid in df["patient_id"]:
+            o, s = _assign_patient_split_utfvp(pid)
+            openset_splits.append(o)
+            splits.append(s)
+
+        df["openset_split"] = openset_splits
+        df["split"] = splits
+
+        # Verify subject-disjoint
+        split_stats = verify_subject_disjoint(df)
+
+        # Step 2: Create enrollment/test sample splits
+        df_complete = make_session_split(
+            df,
+            enrollment_samples=enrollment_samples,
+            test_samples=test_samples,
+            seed=seed,
+        )
     else:
         raise ValueError(
-            f"Dataset {dataset_name} not supported yet. Use 'mmcbnu' or 'dorsal'."
+            f"Dataset {dataset_name} not supported yet. Use 'mmcbnu', 'dorsal', 'fyo', or 'utfvp'."
         )
 
     # Step 3: Create DataFrames for each split

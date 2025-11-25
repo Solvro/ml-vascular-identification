@@ -1,0 +1,30 @@
+# @package _global_
+defaults:
+  - _self_
+
+name: "fyo"
+
+# FYO dataset configuration for multi-body-part vein imaging
+body_part: "dorsal"  # dorsal | palm | wrist | all
+
+transforms:
+  img_size: 256
+  train: true
+  hflip_p: 0.5
+  normalize: imagenet  # imagenet | none
+  # ROI extraction: FYO data already has ROI, but keep for consistency
+  roi_extraction: false  # Disable since ROI/folder is already pre-extracted
+  roi_method: "otsu"
+
+split:
+  train: 0.7
+  val: 0.15
+  test: 0.15
+  seed: 42
+
+# OpenSet settings for FYO (multi-session dataset)
+openset:
+  known_ratio: 0.7
+  val_ratio: 0.15
+  enrollment_samples: 3  # FYO has Session1 & Session2, so 3 samples reasonable
+  test_samples: 2
