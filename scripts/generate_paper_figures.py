@@ -49,7 +49,7 @@ def load_all_results() -> List[Dict]:
 
     for prototypes_file in OUTPUTS_DIR.rglob("prototypes.pt"):
         try:
-            data = torch.load(prototypes_file, map_location="cpu")
+            data = torch.load(prototypes_file, map_location="cpu", weights_only=False)
             metrics = data.get("metrics", {})
 
             # Extract path info
@@ -152,11 +152,16 @@ def create_table2_architecture(df: pd.DataFrame) -> pd.DataFrame:
 
 def create_table3_generalization(df: pd.DataFrame) -> pd.DataFrame:
     """Table 3: Generalization across datasets."""
-    df_table = df[df["model"] == "resnet50_cbam_center"].copy()
+    # Use resnet50_cbam as it is the name in the output folder
+    df_table = df[df["model"] == "resnet50_cbam"].copy()
 
     if df_table.empty:
         print("⚠️  No generalization results found for Table 3")
         return pd.DataFrame()
+
+    # Sort by OSCR descending and keep only the best result per dataset
+    df_table = df_table.sort_values("oscr", ascending=False)
+    df_table = df_table.drop_duplicates(subset=["dataset"], keep="first")
 
     table = df_table[["dataset", "oscr", "auroc", "eer", "rank1", "accuracy"]].copy()
     table.columns = ["Dataset", "OSCR", "AUROC", "EER (%)", "Rank-1", "Accuracy"]
@@ -237,7 +242,7 @@ def create_figure_arch_comparison(df: pd.DataFrame):
 
 def create_figure_generalization(df: pd.DataFrame):
     """Figure: Generalization across datasets."""
-    df_fig = df[df["model"] == "resnet50_cbam_center"].copy()
+    df_fig = df[df["model"] == "resnet50_cbam"].copy()
 
     if df_fig.empty:
         return
@@ -308,7 +313,7 @@ def create_figure_generalization(df: pd.DataFrame):
 
 def create_cmc_curves(df: pd.DataFrame):
     """Figure: CMC curves across datasets."""
-    df_fig = df[df["model"] == "resnet50_cbam_center"].dropna(
+    df_fig = df[df["model"] == "resnet50_cbam"].dropna(
         subset=["rank1", "rank5", "rank10"]
     )
 

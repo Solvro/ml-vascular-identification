@@ -170,6 +170,7 @@ class ResNetCBAM(BaseEmbeddingModel):
         input_channels: int = 3,
         dropout: float = 0.1,
         use_cbam: bool = True,
+        pretrained: bool = True,
     ):
         """Initialize ResNet with CBAM.
         
@@ -179,6 +180,7 @@ class ResNetCBAM(BaseEmbeddingModel):
             input_channels: Number of input channels (default 3 for RGB).
             dropout: Dropout probability (default 0.1).
             use_cbam: Whether to use CBAM attention (default True).
+            pretrained: Whether to load ImageNet pretrained weights (default True).
         """
         super().__init__(embedding_dim)
         self.depth = depth
@@ -223,6 +225,10 @@ class ResNetCBAM(BaseEmbeddingModel):
         self.layer2 = self._make_layer(block, self.base_channels * 2, layers[1], stride=2)
         self.layer3 = self._make_layer(block, self.base_channels * 4, layers[2], stride=2)
         self.layer4 = self._make_layer(block, self.base_channels * 8, layers[3], stride=2)
+
+        # Load pretrained weights if requested
+        if pretrained:
+            self._load_pretrained_weights(depth)
 
         # CBAM attention blocks - dynamically apply to final layer
         if self.use_cbam:
@@ -295,6 +301,42 @@ class ResNetCBAM(BaseEmbeddingModel):
 
         # L2 normalization
         return F.normalize(x, p=2, dim=1)
+
+    def _load_pretrained_weights(self, depth: int):
+        """Load ImageNet pretrained weights."""
+        try:
+            from torch.hub import load_state_dict_from_url
+        except ImportError:
+            print("⚠️  Could not import load_state_dict_from_url. Skipping pretraining.")
+            return
+
+        urls = {
+            18: "https://download.pytorch.org/models/resnet18-f37072fd.pth",
+            34: "https://download.pytorch.org/models/resnet34-333f7ec4.pth",
+            50: "https://download.pytorch.org/models/resnet50-0676ba61.pth",
+            101: "https://download.pytorch.org/models/resnet101-5d3b4d8f.pth",
+        }
+
+        if depth not in urls:
+            print(f"⚠️  No pretrained weights available for ResNet-{depth}")
+            return
+
+        print(f"🔄 Loading ImageNet pretrained weights for ResNet-{depth}...")
+        try:
+            state_dict = load_state_dict_from_url(urls[depth], progress=True)
+            
+            # Filter out fc layer (we use embedding_head)
+            state_dict = {k: v for k, v in state_dict.items() if not k.startswith('fc')}
+            
+            # Load weights (strict=False to ignore missing CBAM and embedding_head)
+            missing, unexpected = self.load_state_dict(state_dict, strict=False)
+            
+            print(f"✅ Pretrained weights loaded.")
+            # print(f"   Missing keys (expected): {len(missing)}")
+            # print(f"   Unexpected keys: {len(unexpected)}")
+            
+        except Exception as e:
+            print(f"❌ Failed to load pretrained weights: {e}")
 
 
 class ResNet50CBAM(ResNetCBAM):
