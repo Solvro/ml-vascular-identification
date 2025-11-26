@@ -1,247 +1,203 @@
 #!/usr/bin/env python3
 """
-Extract tables from evaluation_protocol.json files.
+Extract tables from tables/all_results.json.
 
-Table 1: Architecture comparison on MMCBNU
-- Rows: Models
-- Cols: Metrics (OSCR, AUROC, EER, TPR@FPR, Rank-1, etc.)
-
-Table 2: Generalization across datasets
-- Rows: Models
-- Cols: Datasets (MMCBNU, Dorsal, FYO, UTFVP)
-- Values: OSCR + Rank-1
+Generates:
+1. table2_architecture_comparison.csv
+2. table3_generalization.csv
+3. table4a_ablation_loss.csv
+4. table4b_ablation_dim.csv
+5. table4c_knn.csv
 """
 
 import json
-import math
-from pathlib import Path
-from typing import Dict
-
 import pandas as pd
+from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
-OUTPUTS_DIR = PROJECT_DIR / "outputs"
 TABLES_DIR = PROJECT_DIR / "tables"
-TABLES_DIR.mkdir(exist_ok=True)
+RESULTS_JSON = TABLES_DIR / "all_results.json"
+KNN_RESULTS_JSON = TABLES_DIR / "knn_results.json"
 
+def load_results() -> pd.DataFrame:
+    """Load results from all_results.json and knn_results.json."""
+    df_all = pd.DataFrame()
+    
+    # Load main results
+    if RESULTS_JSON.exists():
+        try:
+            with open(RESULTS_JSON, 'r') as f:
+                data = json.load(f)
+            df_all = pd.DataFrame(data)
+            print(f"✅ Loaded {len(df_all)} rows from {RESULTS_JSON}")
+        except Exception as e:
+            print(f"❌ Error loading {RESULTS_JSON}: {e}")
+    else:
+        print(f"⚠️ {RESULTS_JSON} not found!")
 
-def load_protocol(path: Path) -> Dict:
-    """Load evaluation_protocol.json"""
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"ERR Failed to load {path}: {e}")
-        return None
+    # Load K-NN results and merge
+    if KNN_RESULTS_JSON.exists():
+        try:
+            with open(KNN_RESULTS_JSON, 'r') as f:
+                knn_data = json.load(f)
+            df_knn = pd.DataFrame(knn_data)
+            
+            # Add missing columns to match main dataframe structure
+            # Assuming K-NN results are for mmcbnu/resnet50_cbam/triplet_center/256
+            if 'dataset' not in df_knn.columns: df_knn['dataset'] = 'mmcbnu'
+            if 'model' not in df_knn.columns: df_knn['model'] = 'resnet50_cbam'
+            if 'loss' not in df_knn.columns: df_knn['loss'] = 'triplet_center'
+            if 'embedding_dim' not in df_knn.columns: df_knn['embedding_dim'] = '256'
+            
+            print(f"✅ Loaded {len(df_knn)} rows from {KNN_RESULTS_JSON}")
+            
+            # Append to main dataframe
+            df_all = pd.concat([df_all, df_knn], ignore_index=True)
+            
+        except Exception as e:
+            print(f"❌ Error loading {KNN_RESULTS_JSON}: {e}")
+            
+    return df_all
 
+def save_table(df: pd.DataFrame, filename: str, title: str):
+    if df.empty:
+        print(f"⚠️ {title}: No data found matching criteria.")
+        return
+        
+    # Sort by OSCR descending if present
+    if 'oscr' in df.columns:
+        df = df.sort_values('oscr', ascending=False)
+        
+    path = TABLES_DIR / filename
+    df.to_csv(path, index=False)
+    print(f"📊 {title} saved to {path}")
+    print(df.to_string(index=False))
+    print("-" * 80)
 
-def is_valid_metric(val):
-    """Check if metric value is valid (not NaN, not None, not 0)"""
-    if val is None:
-        return False
-    if isinstance(val, float) and math.isnan(val):
-        return False
-    if val == 0:
-        return False
-    return True
+def main():
+    df = load_results()
+    if df.empty:
+        return
 
+    # Ensure columns exist
+    required_cols = ['dataset', 'model', 'loss', 'embedding_dim', 'k', 'oscr']
+    for col in required_cols:
+        if col not in df.columns:
+            print(f"❌ Missing column: {col}")
+            return
 
-def extract_model_name(path: Path) -> str:
-    """Extract model name from path like outputs/mmcbnu/attention_unet/timestamp/"""
-    parts = path.parts
-    for i, part in enumerate(parts):
-        if part in ["mmcbnu", "dorsal", "utfvp", "fyo"]:
-            if i + 1 < len(parts):
-                return parts[i + 1]
-    return "unknown"
+    # Normalize columns
+    df['k'] = pd.to_numeric(df['k'], errors='coerce').fillna(1).astype(int)
+    df['embedding_dim'] = df['embedding_dim'].astype(str)
 
+    # =========================================================================
+    # Table 2: Architecture Comparison
+    # Filter: dataset=mmcbnu, k=1. Group by model, take best OSCR.
+    # =========================================================================
+    print("\nGenerating Table 2: Architecture Comparison...")
+    t2 = df[
+        (df['dataset'] == 'mmcbnu') & 
+        (df['k'] == 1)
+    ].copy()
+    
+    if not t2.empty:
+        # Group by model and take best OSCR
+        t2_best = t2.loc[t2.groupby('model')['oscr'].idxmax()]
+        cols_t2 = ['model', 'oscr', 'auroc', 'eer', 'rank1', 'accuracy', 'query_time_per_sample_ms']
+        # Filter columns that actually exist
+        cols_t2 = [c for c in cols_t2 if c in t2_best.columns]
+        save_table(t2_best[cols_t2], "table2_architecture_comparison.csv", "Table 2 (Architecture)")
+    else:
+        print("⚠️ Table 2: No data found.")
 
-def extract_dataset_name(path: Path) -> str:
-    """Extract dataset name from path"""
-    parts = path.parts
-    for part in parts:
-        if part in ["mmcbnu", "dorsal", "utfvp", "fyo"]:
-            return part
-    return "unknown"
+    # =========================================================================
+    # Table 3: Generalization
+    # Filter: model=resnet50_cbam (or resnet50_cbam_center), k=1. Group by dataset, take best.
+    # Note: In all_results.json, model is 'resnet50_cbam'.
+    # =========================================================================
+    print("\nGenerating Table 3: Generalization...")
+    # Check which model name is used for the best model
+    best_model_name = 'resnet50_cbam' 
+    # Or check if 'resnet50_cbam_center' exists
+    if 'resnet50_cbam_center' in df['model'].unique():
+        best_model_name = 'resnet50_cbam_center'
+    
+    t3 = df[
+        (df['model'] == best_model_name) & 
+        (df['k'] == 1)
+    ].copy()
+    
+    if not t3.empty:
+        t3_best = t3.loc[t3.groupby('dataset')['oscr'].idxmax()]
+        cols_t3 = ['dataset', 'oscr', 'auroc', 'eer', 'rank1', 'accuracy']
+        cols_t3 = [c for c in cols_t3 if c in t3_best.columns]
+        save_table(t3_best[cols_t3], "table3_generalization.csv", "Table 3 (Generalization)")
+    else:
+        print(f"⚠️ Table 3: No data found for model {best_model_name}.")
 
+    # =========================================================================
+    # Table 4a: Ablation - Loss
+    # Filter: dataset=mmcbnu, model=resnet50_cbam, dim=256, k=1
+    # =========================================================================
+    print("\nGenerating Table 4a: Ablation (Loss)...")
+    t4a = df[
+        (df['dataset'] == 'mmcbnu') & 
+        (df['model'] == best_model_name) & 
+        (df['embedding_dim'] == '256') & 
+        (df['k'] == 1)
+    ].copy()
+    
+    if not t4a.empty:
+        t4a = t4a.loc[t4a.groupby('loss')['oscr'].idxmax()]
+        cols_t4a = ['loss', 'oscr', 'auroc', 'eer', 'rank1']
+        cols_t4a = [c for c in cols_t4a if c in t4a.columns]
+        save_table(t4a[cols_t4a], "table4a_ablation_loss.csv", "Table 4a (Loss)")
+    else:
+        print("⚠️ Table 4a: No data found.")
 
-# ============================================================================
-# TABLE 1: Architecture Comparison (MMCBNU only)
-# ============================================================================
+    # =========================================================================
+    # Table 4b: Ablation - Dimension
+    # Filter: dataset=mmcbnu, model=resnet50_cbam, loss=triplet_center, k=1
+    # =========================================================================
+    print("\nGenerating Table 4b: Ablation (Dimension)...")
+    t4b = df[
+        (df['dataset'] == 'mmcbnu') & 
+        (df['model'] == best_model_name) & 
+        (df['loss'] == 'triplet_center') & 
+        (df['k'] == 1)
+    ].copy()
+    
+    if not t4b.empty:
+        t4b = t4b.loc[t4b.groupby('embedding_dim')['oscr'].idxmax()]
+        # Sort by dim numerically
+        t4b['dim_int'] = pd.to_numeric(t4b['embedding_dim'], errors='coerce')
+        t4b = t4b.sort_values('dim_int')
+        cols_t4b = ['embedding_dim', 'oscr', 'auroc', 'eer', 'rank1']
+        cols_t4b = [c for c in cols_t4b if c in t4b.columns]
+        save_table(t4b[cols_t4b], "table4b_ablation_dim.csv", "Table 4b (Dimension)")
+    else:
+        print("⚠️ Table 4b: No data found.")
 
-print("[TABLE 1] Building Architecture Comparison on MMCBNU")
-print()
+    # =========================================================================
+    # Table 4c: K-NN
+    # Filter: dataset=mmcbnu, model=resnet50_cbam, loss=triplet_center, dim=256
+    # =========================================================================
+    print("\nGenerating Table 4c: K-NN...")
+    t4c = df[
+        (df['dataset'] == 'mmcbnu') & 
+        (df['model'] == best_model_name) & 
+        (df['loss'] == 'triplet_center') & 
+        (df['embedding_dim'] == '256')
+    ].copy()
+    
+    if not t4c.empty:
+        t4c = t4c.loc[t4c.groupby('k')['oscr'].idxmax()]
+        t4c = t4c.sort_values('k')
+        cols_t4c = ['k', 'oscr', 'auroc', 'eer', 'rank1']
+        cols_t4c = [c for c in cols_t4c if c in t4c.columns]
+        save_table(t4c[cols_t4c], "table4c_knn.csv", "Table 4c (K-NN)")
+    else:
+        print("⚠️ Table 4c: No data found.")
 
-table1_data = []
-
-for protocol_file in OUTPUTS_DIR.rglob("evaluation_protocol.json"):
-    # Only MMCBNU for Table 1
-    if "mmcbnu" not in str(protocol_file):
-        continue
-
-    protocol = load_protocol(protocol_file)
-    if not protocol:
-        continue
-
-    model = extract_model_name(protocol_file)
-    metrics = protocol.get("metrics", {})
-
-    row = {
-        "Model": model,
-        "OSCR": round(metrics.get("oscr_auc", 0), 4),
-        "AUROC": round(metrics.get("auroc", 0), 4),
-        "EER (%)": round(metrics.get("eer", 0), 2),
-        "TPR@FPR=0.1%": round(metrics.get("tpr_at_fpr_0.001", 0), 2),
-        "TPR@FPR=1%": round(metrics.get("tpr_at_fpr_0.01", 0), 2),
-        "Rank-1": round(metrics.get("cmc_rank1", 0), 2),
-        "Accuracy": round(metrics.get("accuracy_known", 0), 2),
-    }
-    table1_data.append(row)
-    print(f"  {model:25s} OSCR={row['OSCR']:.4f}")
-
-# Remove duplicates, keep best OSCR for each model
-df_table1 = pd.DataFrame(table1_data)
-if not df_table1.empty:
-    # Group by model and keep the one with highest OSCR
-    df_table1 = df_table1.loc[df_table1.groupby("Model")["OSCR"].idxmax()]
-    df_table1 = df_table1.sort_values("OSCR", ascending=False)
-
-    # Save CSV
-    csv_path = TABLES_DIR / "table1_architecture.csv"
-    df_table1.to_csv(csv_path, index=False)
-
-    # Save LaTeX
-    latex_path = TABLES_DIR / "table1_architecture.tex"
-    latex = df_table1.to_latex(index=False, float_format="%.4f")
-    with open(latex_path, "w") as f:
-        f.write(latex)
-
-    print("\nTable 1 saved:")
-    print(f"  CSV: {csv_path}")
-    print(f"  TEX: {latex_path}")
-    print()
-    print(df_table1.to_string())
-
-# ============================================================================
-# TABLE 2: Generalization (All models on different datasets)
-# ============================================================================
-
-print("\n\n[TABLE 2] Building Generalization Across Datasets")
-print()
-
-# Collect best run per (model, dataset) - ONE result per combination
-table2_raw = {}
-
-for protocol_file in OUTPUTS_DIR.rglob("evaluation_protocol.json"):
-    protocol = load_protocol(protocol_file)
-    if not protocol:
-        continue
-
-    model = extract_model_name(protocol_file)
-    dataset = extract_dataset_name(protocol_file)
-    metrics = protocol.get("metrics", {})
-
-    if dataset not in ["mmcbnu", "dorsal", "utfvp", "fyo"]:
-        continue
-
-    key = (model, dataset)
-    oscr = metrics.get("oscr_auc")
-    rank1 = metrics.get("cmc_rank1")
-
-    # Skip invalid entries
-    if not is_valid_metric(oscr) or not is_valid_metric(rank1):
-        print(f"  SKIP {model:20s} {dataset.upper():10s} - OSCR={oscr}, Rank-1={rank1}")
-        continue
-
-    # Keep best OSCR for each (model, dataset) pair
-    if key not in table2_raw or oscr > table2_raw[key]["OSCR"]:
-        table2_raw[key] = {
-            "OSCR": oscr,
-            "Rank-1": rank1,
-        }
-
-# Build table with one row per model, columns per dataset
-models_seen = set()
-table2_data = {}
-
-for (model, dataset), metrics in table2_raw.items():
-    models_seen.add(model)
-    if model not in table2_data:
-        table2_data[model] = {"Model": model}
-
-    oscr_val = round(metrics["OSCR"], 4)
-    rank1_val = round(metrics["Rank-1"] * 100, 1)
-
-    # Store as "OSCR / Rank-1%"
-    table2_data[model][dataset.upper()] = f"{oscr_val} / {rank1_val}"
-    print(
-        f"  {model:20s} {dataset.upper():10s} OSCR={oscr_val:.4f} Rank-1={rank1_val:.1f}%"
-    )
-
-# Convert to dataframe
-df_table2_list = []
-for model_name in sorted(models_seen):
-    df_table2_list.append(table2_data[model_name])
-
-df_table2 = pd.DataFrame(df_table2_list)
-
-if not df_table2.empty:
-    # Reorder columns: Model first, then datasets
-    col_order = ["Model"]
-    for ds in ["MMCBNU", "DORSAL", "FYO", "UTFVP"]:
-        if ds in df_table2.columns:
-            col_order.append(ds)
-
-    df_table2 = df_table2[col_order]
-
-    # Save CSV
-    csv_path = TABLES_DIR / "table2_generalization.csv"
-    df_table2.to_csv(csv_path, index=False)
-
-    # Save LaTeX
-    latex_path = TABLES_DIR / "table2_generalization.tex"
-    latex = df_table2.to_latex(index=False)
-    with open(latex_path, "w") as f:
-        f.write(latex)
-
-    print("\nTable 2 saved:")
-    print(f"  CSV: {csv_path}")
-    print(f"  TEX: {latex_path}")
-    print()
-    print(df_table2.to_string(index=False))
-else:
-    print("WARN No data for Table 2")
-
-print("\n" + "=" * 70)
-print("OK Tables generated successfully!")
-print(f"Output: {TABLES_DIR}")
-print("=" * 70)
-
-print("\nNOTE - Data Availability & Split Ratios:")
-print("  MMCBNU (12000 samples):")
-print("    - Full open-set evaluation (known + unknown classes)")
-print(
-    "    - Subject-disjoint splits: 55% train / 10% val / 5% test_known / 30% unknown"
-)
-print()
-print("  DORSAL (1782 samples):")
-print("    - Full open-set evaluation (known + unknown classes)")
-print(
-    "    - Subject-disjoint splits: 55% train / 10% val / 5% test_known / 30% unknown"
-)
-print()
-print("  FYO (320 samples - TOO SMALL):")
-print("    - Modified split ratios: 50% train / 15% val / 20% test_known / 15% unknown")
-print(
-    "    - Reason: Limited data requires aggressive test_known allocation for enrollment samples"
-)
-print()
-print("  UTFVP (1444 samples - TOO SMALL):")
-print("    - Modified split ratios: 50% train / 15% val / 20% test_known / 15% unknown")
-print(
-    "    - Reason: Limited data requires aggressive test_known allocation for enrollment samples"
-)
-print()
-print(
-    "  Result: Only MMCBNU and DORSAL have sufficient data for reliable open-set evaluation"
-)
+if __name__ == "__main__":
+    main()

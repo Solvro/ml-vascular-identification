@@ -26,10 +26,7 @@ class FYOScanner(BaseScanner):
     def scan(root: str, body_part: str = "all") -> pd.DataFrame:
         """Scan the FYO dataset layout.
 
-        Expects ROI folder with Session1/Session2 subfolders containing:
-        - Dorsal/ (hand dorsal surface)
-        - Palm/   (palm surface)
-        - Wrist/  (wrist surface)
+        Checks for 'Generated_Images' (10 samples/session) first, then 'ROI' (1 sample/session).
 
         Args:
             root: Root directory of the FYO dataset.
@@ -41,10 +38,20 @@ class FYOScanner(BaseScanner):
         """
         rows = []
         root = Path(root)
+        
+        # Check for Generated_Images (preferred due to more samples)
+        gen_dir = root / "Generated_Images"
         roi_dir = root / "ROI"
-
-        if not roi_dir.exists():
-            roi_dir = root
+        
+        if gen_dir.exists():
+            base_dir = gen_dir
+            mode = "generated"
+        elif roi_dir.exists():
+            base_dir = roi_dir
+            mode = "roi"
+        else:
+            base_dir = root
+            mode = "roi"
 
         # Determine which body parts to scan
         body_parts_to_scan = {
@@ -57,7 +64,7 @@ class FYOScanner(BaseScanner):
         parts = body_parts_to_scan.get(body_part.lower(), ["Dorsal"])
 
         # Iterate through sessions
-        for session_dir in sorted(roi_dir.iterdir()):
+        for session_dir in sorted(base_dir.iterdir()):
             if not session_dir.is_dir():
                 continue
 
@@ -72,18 +79,27 @@ class FYOScanner(BaseScanner):
                     continue
 
                 # Scan images in body_part directory
-                # Naming: {patient_id}_{side}.png (e.g., "100_L.png", "100_R.png")
                 for img_file in part_dir.iterdir():
                     if img_file.suffix.lower() not in [".png", ".jpg", ".jpeg", ".bmp"]:
                         continue
 
-                    # Parse filename: "100_L.png" → patient_id=100, side=L
-                    match = re.match(r"(\d+)_([LR])\.png", img_file.name, re.IGNORECASE)
-                    if not match:
-                        continue
-
-                    patient_id = match.group(1).zfill(3)  # Pad to 3 digits
-                    side = match.group(2).upper()
+                    if mode == "generated":
+                        # Naming: s{patient}_{sample}_{side}_S{session}.jpg
+                        # e.g. s100_10_L_S1.jpg
+                        match = re.match(r"s(\d+)_(\d+)_([LR])_S\d+\.(?:jpg|png|bmp)", img_file.name, re.IGNORECASE)
+                        if match:
+                            patient_id = match.group(1).zfill(3)
+                            side = match.group(3).upper()
+                        else:
+                            continue
+                    else:
+                        # ROI Naming: {patient_id}_{side}.png (e.g., "100_L.png")
+                        match = re.match(r"(\d+)_([LR])\.png", img_file.name, re.IGNORECASE)
+                        if match:
+                            patient_id = match.group(1).zfill(3)
+                            side = match.group(2).upper()
+                        else:
+                            continue
 
                     # Create unique finger class ID
                     finger_class_id = f"fyo_{patient_id}_{part.lower()}_{side}"

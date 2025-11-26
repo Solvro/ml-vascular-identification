@@ -286,41 +286,71 @@ results = []
 
 for prototypes_file in OUTPUTS_DIR.rglob("prototypes.pt"):
     try:
+        # Load metrics from prototypes.pt
         data = torch.load(prototypes_file, map_location='cpu', weights_only=False)
         metrics = data.get('metrics', {})
 
         # Extract path info
         parts = prototypes_file.parts
-        dataset_idx = None
-        model_idx = None
-
-        # Find indices
-        for i, part in enumerate(parts):
+        dataset = "unknown"
+        model = "unknown"
+        
+        # Try to infer dataset and model from path
+        for part in parts:
             if part in ['mmcbnu', 'dorsal', 'utfvp', 'fyo']:
                 dataset = part
-                dataset_idx = i
             if part in ['basic', 'unet', 'attention_unet', 'resnet50_cbam_center', 'resnet50_cbam', 'simple_cnn']:
                 model = part
-                model_idx = i
 
-        if dataset_idx and model_idx:
-            timestamp = parts[model_idx + 1]
+        # Try to load protocol for detailed config
+        protocol_path = prototypes_file.parent / "evaluation_protocol.json"
+        loss_name = "unknown"
+        embedding_dim = "unknown"
+        k_neighbors = 1
+        
+        if protocol_path.exists():
+            with open(protocol_path, 'r') as f:
+                protocol = json.load(f)
+                
+                # Extract config details
+                if 'training' in protocol:
+                    loss_name = protocol['training'].get('loss', 'unknown')
+                
+                if 'model' in protocol:
+                    embedding_dim = protocol['model'].get('embedding_dim', 'unknown')
+                    # Fallback if model name not found in path
+                    if model == "unknown":
+                        model = protocol['model'].get('name', 'unknown')
+                
+                if 'dataset' in protocol:
+                    # Fallback if dataset not found in path
+                    if dataset == "unknown":
+                        dataset = protocol['dataset'].get('name', 'unknown')
+                        
+                if 'inference' in protocol:
+                    k_neighbors = protocol['inference'].get('k', 1)
 
-            result = {
-                'dataset': dataset,
-                'model': model,
-                'timestamp': timestamp,
-                'path': str(prototypes_file),
-                'auroc': metrics.get('auroc', 'N/A'),
-                'oscr': metrics.get('oscr_auc', 'N/A'),
-                'eer': metrics.get('eer', 'N/A'),
-                'rank1': metrics.get('cmc_rank1', 'N/A'),
-                'accuracy': metrics.get('accuracy_known', 'N/A'),
-                'registration_time_ms': metrics.get('registration_time_ms', 'N/A'),
-                'query_time_per_sample_ms': metrics.get('avg_query_time_per_sample_ms', 'N/A'),
-            }
-            results.append(result)
-            print(f"✅ Found: {dataset:10s} + {model:25s} | OSCR: {result['oscr']}")
+        # Timestamp from path (usually the parent folder name)
+        timestamp = prototypes_file.parent.name
+
+        result = {
+            'dataset': dataset,
+            'model': model,
+            'loss': loss_name,
+            'embedding_dim': embedding_dim,
+            'k': k_neighbors,
+            'timestamp': timestamp,
+            'path': str(prototypes_file),
+            'auroc': metrics.get('auroc', 'N/A'),
+            'oscr': metrics.get('oscr_auc', metrics.get('oscr', 'N/A')),
+            'eer': metrics.get('eer', 'N/A'),
+            'rank1': metrics.get('cmc_rank1', 'N/A'),
+            'accuracy': metrics.get('known_accuracy', 'N/A'),
+            'registration_time_ms': metrics.get('registration_time_ms', 'N/A'),
+            'query_time_per_sample_ms': metrics.get('avg_query_time_per_sample_ms', 'N/A'),
+        }
+        results.append(result)
+        print(f"✅ Found: {dataset:10s} | {model:20s} | Loss: {loss_name:15s} | Dim: {str(embedding_dim):5s} | K: {str(k_neighbors):3s} | OSCR: {result['oscr']}")
 
     except Exception as e:
         print(f"⚠️  Error loading {prototypes_file}: {e}")
@@ -335,23 +365,102 @@ if results:
         json.dump(results, f, indent=2, default=str)
     print(f"\n💾 Saved all results to: {raw_json_path}")
 
-    # Create Table 2: Architecture Comparison
-    df_arch = df_all[df_all['dataset'] == 'mmcbnu'].copy()
+    # 1. Table 2: Architecture Comparison (MMCBNU, default loss/dim/k)
+    # Filter for default params: loss=triplet_center (or similar), dim=256 (default?), k=1
+    # Actually, for architecture comparison, we just want to compare models on mmcbnu.
+    # We should pick the 'standard' run for each model.
+    # Assuming the architecture loop runs with defaults.
+    df_arch = df_all[
+        (df_all['dataset'] == 'mmcbnu') & 
+        (df_all['k'] == 1)
+    ].copy()
+    
+    # If we have multiple runs (e.g. from ablation), we need to filter for the "main" configuration.
+    # The main config usually has embedding_dim=256 and loss=triplet_center (or whatever default is).
+    # But simpler: just group by model and take the latest timestamp or best score?
+    # For now, let's just dump what we have, maybe filtering by loss if possible.
+    
     if not df_arch.empty:
-        table2 = df_arch[['model', 'oscr', 'auroc', 'eer', 'rank1', 'accuracy', 'query_time_per_sample_ms']]
+        # Sort by OSCR descending
+        try:
+            df_arch['oscr'] = pd.to_numeric(df_arch['oscr'], errors='coerce')
+            df_arch = df_arch.sort_values('oscr', ascending=False)
+        except:
+            pass
+            
+        table2 = df_arch[['model', 'loss', 'embedding_dim', 'oscr', 'auroc', 'eer', 'rank1', 'accuracy', 'query_time_per_sample_ms']]
         table2_path = TABLES_DIR / "table2_architecture_comparison.csv"
         table2.to_csv(table2_path, index=False)
         print(f"📊 Table 2 (Architecture): {table2_path}")
-        print(table2.to_string())
 
-    # Create Table 3: Generalization
-    df_gen = df_all[df_all['model'] == 'resnet50_cbam_center'].copy()
+    # 2. Table 3: Generalization (Best Model on all datasets)
+    df_gen = df_all[
+        (df_all['model'] == 'resnet50_cbam_center') &
+        (df_all['k'] == 1) &
+        (df_all['loss'].isin(['triplet_center', 'triplet_center_loss', 'unknown'])) # Default loss
+    ].copy()
+    
     if not df_gen.empty:
         table3 = df_gen[['dataset', 'oscr', 'auroc', 'eer', 'rank1', 'accuracy']]
         table3_path = TABLES_DIR / "table3_generalization.csv"
         table3.to_csv(table3_path, index=False)
         print(f"📊 Table 3 (Generalization): {table3_path}")
-        print(table3.to_string())
+
+    # 3. Table 4a: Ablation - Loss Functions
+    df_loss = df_all[
+        (df_all['dataset'] == 'mmcbnu') &
+        (df_all['model'] == 'resnet50_cbam_center') &
+        (df_all['k'] == 1)
+    ].copy()
+    
+    if not df_loss.empty:
+        # We might have duplicates due to dim ablation (which also uses resnet50_cbam_center).
+        # We want to see variation in 'loss'.
+        # Filter for default dim (256) to isolate loss impact
+        df_loss_filtered = df_loss[df_loss['embedding_dim'].astype(str) == '256']
+        
+        if not df_loss_filtered.empty:
+            table4a = df_loss_filtered[['loss', 'oscr', 'auroc', 'eer', 'rank1']]
+            table4a_path = TABLES_DIR / "table4a_ablation_loss.csv"
+            table4a.to_csv(table4a_path, index=False)
+            print(f"📊 Table 4a (Ablation Loss): {table4a_path}")
+
+    # 4. Table 4b: Ablation - Embedding Dimensions
+    df_dim = df_all[
+        (df_all['dataset'] == 'mmcbnu') &
+        (df_all['model'] == 'resnet50_cbam_center') &
+        (df_all['k'] == 1)
+    ].copy()
+    
+    if not df_dim.empty:
+        # Filter for default loss to isolate dim impact
+        # Default loss is usually triplet_center
+        df_dim_filtered = df_dim[df_dim['loss'].isin(['triplet_center', 'triplet_center_loss'])]
+        
+        if not df_dim_filtered.empty:
+            table4b = df_dim_filtered[['embedding_dim', 'oscr', 'auroc', 'eer', 'rank1']]
+            table4b_path = TABLES_DIR / "table4b_ablation_dim.csv"
+            table4b.to_csv(table4b_path, index=False)
+            print(f"📊 Table 4b (Ablation Dim): {table4b_path}")
+
+    # 5. Table 4c: K-NN
+    df_knn = df_all[
+        (df_all['dataset'] == 'mmcbnu') &
+        (df_all['model'] == 'resnet50_cbam_center')
+    ].copy()
+    
+    if not df_knn.empty:
+        # Filter for default loss and dim
+        df_knn_filtered = df_knn[
+            (df_knn['loss'].isin(['triplet_center', 'triplet_center_loss'])) &
+            (df_knn['embedding_dim'].astype(str) == '256')
+        ]
+        
+        if not df_knn_filtered.empty:
+            table4c = df_knn_filtered[['k', 'oscr', 'auroc', 'eer', 'rank1']]
+            table4c_path = TABLES_DIR / "table4c_knn.csv"
+            table4c.to_csv(table4c_path, index=False)
+            print(f"📊 Table 4c (K-NN): {table4c_path}")
 
     print(f"\n✅ All tables saved to: {TABLES_DIR}")
 else:

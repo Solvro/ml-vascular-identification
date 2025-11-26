@@ -1,0 +1,29 @@
+[
+  {
+    "k":1,
+    "oscr":0.9901027337,
+    "auroc":0.9935493827,
+    "eer":2.25,
+    "rank1":0.9936507937,
+    "timestamp":"2025-11-26T07:47:12.186370",
+    "path":"outputs\/mmcbnu\/resnet50_cbam\/20251126_074254\/evaluation_protocol.json"
+  },
+  {
+    "k":3,
+    "oscr":0.8848209877,
+    "auroc":0.8888866843,
+    "eer":18.8214285714,
+    "rank1":0.9936507937,
+    "timestamp":"2025-11-26T07:51:02.512557",
+    "path":"outputs\/mmcbnu\/resnet50_cbam\/20251126_075049\/evaluation_protocol.json"
+  },
+  {
+    "k":5,
+    "oscr":0.7949082892,
+    "auroc":0.7990868607,
+    "eer":27.3571428571,
+    "rank1":0.9936507937,
+    "timestamp":"2025-11-26T07:51:16.694420",
+    "path":"outputs\/mmcbnu\/resnet50_cbam\/20251126_075104\/evaluation_protocol.json"
+  }
+]

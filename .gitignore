@@ -42,7 +42,7 @@ data/UTFVP/*
 # Logs and outputs
 logs/
 # outputs/
-outputs/**/checkpoint*.pt
+outputs/*
 checkpoints/
 wandb/
 *.log

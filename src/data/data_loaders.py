@@ -469,10 +469,19 @@ def create_openset_data_loaders(
         rng.shuffle(patients)
 
         n = len(patients)
-        n_train = int(n * 0.55)
-        n_val = int(n * 0.10)
-        n_test_known = int(n * 0.05)
-        # Rest become unknown: n_unknown = max(0, n - (n_train + n_val + n_test_known))
+        n_train = max(1, int(n * 0.55))
+        n_val = max(1, int(n * 0.10))
+        n_test_known = max(1, int(n * 0.05))
+
+        # Ensure at least 1 unknown patient
+        if n_train + n_val + n_test_known >= n:
+            # Reduce val first, then test_known
+            if n_val > 1:
+                n_val = max(1, n_val - (n_train + n_val + n_test_known - n + 1))
+            if n_train + n_val + n_test_known >= n and n_test_known > 1:
+                n_test_known = max(
+                    1, n_test_known - (n_train + n_val + n_test_known - n + 1)
+                )
 
         # Assign patient groups
         val_patients = set(patients[n_train : n_train + n_val])
@@ -513,65 +522,25 @@ def create_openset_data_loaders(
             seed=seed,
         )
     elif dataset_name == "fyo":
-        # FYO: multi-body-part dataset. Use subject-level partition.
-        # Note: FYO has limited data, use custom split ratios (default 50/15/20/15)
+        # FYO: multi-body-part dataset.
+        # Now using Generated_Images (20 samples/class), so we can use standard split logic.
         full_dataset = FYODataset(body_part=body_part)
-        df = full_dataset.df.copy()
 
-        # Use custom split ratios for small dataset
-        if split_ratios is None:
-            # Default for FYO: more aggressive on test_known to get enough enrollment samples
-            split_ratios = {"train": 0.50, "val": 0.15, "test_known": 0.20}
-
-        train_ratio = split_ratios.get("train", 0.50)
-        val_ratio = split_ratios.get("val", 0.15)
-        test_known_ratio = split_ratios.get("test_known", 0.20)
-        unknown_ratio = 1.0 - train_ratio - val_ratio - test_known_ratio
-
-        # Get unique patients and shuffle
-        patients = sorted(df["patient_id"].unique().tolist())
-        rng = np.random.default_rng(seed)
-        rng.shuffle(patients)
-
-        n = len(patients)
-        n_train = int(n * train_ratio)
-        n_val = int(n * val_ratio)
-        n_test_known = int(n * test_known_ratio)
-
-        # Assign patient groups
-        val_patients = set(patients[n_train : n_train + n_val])
-        test_known_patients = set(
-            patients[n_train + n_val : n_train + n_val + n_test_known]
+        # Step 1: Apply finger-class-level OpenSet split (known/unknown)
+        df_with_openset = make_finger_class_split(
+            full_dataset.df,
+            known_ratio=known_ratio,
+            val_ratio=val_ratio,
+            seed=seed,
+            subject_disjoint=subject_disjoint,
         )
-        unknown_patients = set(patients[n_train + n_val + n_test_known :])
 
-        # Create openset_split and split columns (subject-disjoint)
-        def _assign_patient_split_fyo(pid):
-            if pid in unknown_patients:
-                return ("unknown", "test")
-            elif pid in test_known_patients:
-                return ("known", "test")
-            elif pid in val_patients:
-                return ("known", "val")
-            else:
-                return ("known", "train")
+        # Verify subject-disjoint constraint
+        split_stats = verify_subject_disjoint(df_with_openset)
 
-        openset_splits = []
-        splits = []
-        for pid in df["patient_id"]:
-            o, s = _assign_patient_split_fyo(pid)
-            openset_splits.append(o)
-            splits.append(s)
-
-        df["openset_split"] = openset_splits
-        df["split"] = splits
-
-        # Verify subject-disjoint
-        split_stats = verify_subject_disjoint(df)
-
-        # Step 2: Create enrollment/test sample splits
+        # Step 2: Apply session split (enrollment/test samples within each finger)
         df_complete = make_session_split(
-            df,
+            df_with_openset,
             enrollment_samples=enrollment_samples,
             test_samples=test_samples,
             seed=seed,
@@ -598,9 +567,19 @@ def create_openset_data_loaders(
         rng.shuffle(patients)
 
         n = len(patients)
-        n_train = int(n * train_ratio)
-        n_val = int(n * val_ratio)
-        n_test_known = int(n * test_known_ratio)
+        n_train = max(1, int(n * train_ratio))
+        n_val = max(1, int(n * val_ratio))
+        n_test_known = max(1, int(n * test_known_ratio))
+
+        # Ensure at least 1 unknown patient
+        if n_train + n_val + n_test_known >= n:
+            # Reduce val first, then test_known
+            if n_val > 1:
+                n_val = max(1, n_val - (n_train + n_val + n_test_known - n + 1))
+            if n_train + n_val + n_test_known >= n and n_test_known > 1:
+                n_test_known = max(
+                    1, n_test_known - (n_train + n_val + n_test_known - n + 1)
+                )
 
         # Assign patient groups
         val_patients = set(patients[n_train : n_train + n_val])
@@ -634,10 +613,16 @@ def create_openset_data_loaders(
         split_stats = verify_subject_disjoint(df)
 
         # Step 2: Create enrollment/test sample splits
+        # UTFVP has only 4 samples per finger class.
+        # We need at least 1 for enrollment and 1 for test.
+        # Default enrollment_samples=7 is too high.
+        actual_enrollment = min(enrollment_samples, 2)  # Use 2 for enrollment (50%)
+        actual_test = min(test_samples, 2)              # Use 2 for test (50%)
+        
         df_complete = make_session_split(
             df,
-            enrollment_samples=enrollment_samples,
-            test_samples=test_samples,
+            enrollment_samples=actual_enrollment,
+            test_samples=actual_test,
             seed=seed,
         )
     else:

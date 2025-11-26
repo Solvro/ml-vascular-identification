@@ -784,28 +784,48 @@ def train(cfg: DictConfig) -> None:
         print("🎯 Evaluating OpenSet recognition...")
         k_neighbors = getattr(cfg, "k_neighbors", 1)
 
-        with InferenceTimer("OpenSet evaluation (query)") as timer:
-            metrics = evaluate_openset(
-                model,
-                query_known_loader,
-                test_unknown_loader,
-                prototypes,
-                device,
-                class_to_idx,
-                threshold,
-                k=k_neighbors,
-            )
-        query_time_ms = timer.get_elapsed_ms()
+        # Check if we have enough data for evaluation
+        has_known = len(query_known_loader.dataset) > 0 if hasattr(query_known_loader, "dataset") else False
+        has_unknown = len(test_unknown_loader.dataset) > 0 if hasattr(test_unknown_loader, "dataset") else False
 
-        # Add timing info to metrics
-        metrics["registration_time_ms"] = registration_time_ms
-        metrics["query_time_ms"] = query_time_ms
-        metrics["avg_query_time_per_sample_ms"] = (
-            query_time_ms
-            / (len(query_known_loader.dataset) + len(test_unknown_loader.dataset))
-            if hasattr(query_known_loader, "dataset")
-            else 0.0
-        )
+        if not has_known or not has_unknown:
+            print("\n⚠️  WARNING: Insufficient data for OpenSet evaluation!")
+            print(f"   Known samples: {len(query_known_loader.dataset) if hasattr(query_known_loader, 'dataset') else 0}")
+            print(f"   Unknown samples: {len(test_unknown_loader.dataset) if hasattr(test_unknown_loader, 'dataset') else 0}")
+            print("   Metrics (AUROC, OSCR, EER) will be NaN.")
+            print("   This usually happens when the dataset is too small to split into Train/Val/TestKnown/Unknown.")
+            
+            # Create dummy metrics to avoid crashes
+            metrics = {
+                "eer": float("nan"), "auroc": float("nan"), "oscr": float("nan"),
+                "tpr_at_fpr_001": float("nan"), "tpr_at_fpr_01": float("nan"),
+                "known_accuracy": float("nan"), "unknown_rejection": float("nan"),
+                "threshold": threshold,
+                "registration_time_ms": 0.0, "query_time_ms": 0.0, "avg_query_time_per_sample_ms": 0.0
+            }
+        else:
+            with InferenceTimer("OpenSet evaluation (query)") as timer:
+                metrics = evaluate_openset(
+                    model,
+                    query_known_loader,
+                    test_unknown_loader,
+                    prototypes,
+                    device,
+                    class_to_idx,
+                    threshold,
+                    k=k_neighbors,
+                )
+            query_time_ms = timer.get_elapsed_ms()
+
+            # Add timing info to metrics
+            metrics["registration_time_ms"] = registration_time_ms
+            metrics["query_time_ms"] = query_time_ms
+            metrics["avg_query_time_per_sample_ms"] = (
+                query_time_ms
+                / (len(query_known_loader.dataset) + len(test_unknown_loader.dataset))
+                if hasattr(query_known_loader, "dataset")
+                else 0.0
+            )
 
         print("\n📊 OpenSet Recognition Results:")
         print(f"   EER: {metrics['eer']:.4f}")
