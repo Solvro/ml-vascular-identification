@@ -1,0 +1,3 @@
+- data=mmcbnu
+- model=unet
+- trainer.epochs=100

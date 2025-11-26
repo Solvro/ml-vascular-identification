@@ -37,10 +37,19 @@ PROJECT_DIR = Path(__file__).parent.parent
 OUTPUTS_DIR = PROJECT_DIR / "outputs"
 TABLES_DIR = PROJECT_DIR / "tables"
 FIGURES_DIR = TABLES_DIR / "figures"
-FIGURES_DIR.mkdir(exist_ok=True)
+FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
 print("📊 Generating Paper Figures and Tables")
 print(f"📂 Output directory: {FIGURES_DIR}")
+
+MODEL_NAMES = {
+    "basic": "Basic CNN",
+    "unet": "U-Net",
+    "attention_unet": "Attn. U-Net",
+    "resnet50_cbam_center": "ResNet50+CBAM",
+    "resnet50_cbam": "ResNet50+CBAM",
+    "simple_cnn": "Simple CNN",
+}
 
 
 def load_all_results() -> List[Dict]:
@@ -49,7 +58,7 @@ def load_all_results() -> List[Dict]:
 
     for prototypes_file in OUTPUTS_DIR.rglob("prototypes.pt"):
         try:
-            data = torch.load(prototypes_file, map_location="cpu")
+            data = torch.load(prototypes_file, map_location="cpu", weights_only=False)
             metrics = data.get("metrics", {})
 
             # Extract path info
@@ -152,11 +161,16 @@ def create_table2_architecture(df: pd.DataFrame) -> pd.DataFrame:
 
 def create_table3_generalization(df: pd.DataFrame) -> pd.DataFrame:
     """Table 3: Generalization across datasets."""
-    df_table = df[df["model"] == "resnet50_cbam_center"].copy()
+    # Use resnet50_cbam as it is the name in the output folder
+    df_table = df[df["model"] == "resnet50_cbam"].copy()
 
     if df_table.empty:
         print("⚠️  No generalization results found for Table 3")
         return pd.DataFrame()
+
+    # Sort by OSCR descending and keep only the best result per dataset
+    df_table = df_table.sort_values("oscr", ascending=False)
+    df_table = df_table.drop_duplicates(subset=["dataset"], keep="first")
 
     table = df_table[["dataset", "oscr", "auroc", "eer", "rank1", "accuracy"]].copy()
     table.columns = ["Dataset", "OSCR", "AUROC", "EER (%)", "Rank-1", "Accuracy"]
@@ -195,37 +209,57 @@ def create_figure_arch_comparison(df: pd.DataFrame):
     if df_fig.empty:
         return
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Architecture Comparison on MMCBNU", fontsize=16, fontweight="bold")
+    # Map model names to nicer labels
+    df_fig["model_label"] = df_fig["model"].map(lambda x: MODEL_NAMES.get(x, x))
+    
+    # Sort by OSCR to have a logical order
+    df_fig = df_fig.sort_values("oscr", ascending=True)
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    # fig.suptitle("Architecture Comparison on MMCBNU", fontsize=16, fontweight="bold")
 
     metrics = ["oscr", "auroc", "rank1", "accuracy"]
-    titles = ["OSCR", "AUROC", "Rank-1 Accuracy", "Overall Accuracy"]
+    titles = ["OSCR", "AUROC", "Rank-1 Accuracy", "Known Accuracy"]
+    
+    colors = sns.color_palette("viridis", len(df_fig))
 
     for idx, (metric, title) in enumerate(zip(metrics, titles)):
         ax = axes[idx // 2, idx % 2]
-        data = df_fig[["model", metric]].dropna()
-
-        bars = ax.bar(
-            range(len(data)),
-            data[metric].values,
-            color=sns.color_palette("husl", len(data)),
+        
+        # Horizontal bars are often better for long labels
+        bars = ax.barh(
+            range(len(df_fig)),
+            df_fig[metric].values,
+            color=colors,
+            alpha=0.8
         )
-        ax.set_xticks(range(len(data)))
-        ax.set_xticklabels(data["model"].values, rotation=45, ha="right")
-        ax.set_ylabel(title, fontweight="bold")
-        ax.set_ylim([0, 1])
-        ax.grid(axis="y", alpha=0.3)
+        
+        ax.set_yticks(range(len(df_fig)))
+        ax.set_yticklabels(df_fig["model_label"].values, fontsize=11)
+        ax.set_xlabel(title, fontweight="bold")
+        
+        # Dynamic x-limit to show differences
+        min_val = df_fig[metric].min()
+        if min_val > 0.9:
+            ax.set_xlim([0.85, 1.01])
+        elif min_val > 0.8:
+            ax.set_xlim([0.7, 1.01])
+        else:
+            ax.set_xlim([0, 1.01])
+            
+        ax.grid(axis="x", alpha=0.3)
 
         # Add value labels on bars
         for bar in bars:
-            height = bar.get_height()
+            width = bar.get_width()
             ax.text(
-                bar.get_x() + bar.get_width() / 2.0,
-                height,
-                f"{height:.3f}",
-                ha="center",
-                va="bottom",
+                width,
+                bar.get_y() + bar.get_height() / 2.0,
+                f" {width:.3f}",
+                ha="left",
+                va="center",
                 fontsize=9,
+                fontweight='bold'
             )
 
     plt.tight_layout()
@@ -237,7 +271,7 @@ def create_figure_arch_comparison(df: pd.DataFrame):
 
 def create_figure_generalization(df: pd.DataFrame):
     """Figure: Generalization across datasets."""
-    df_fig = df[df["model"] == "resnet50_cbam_center"].copy()
+    df_fig = df[df["model"] == "resnet50_cbam"].copy()
 
     if df_fig.empty:
         return
@@ -308,7 +342,7 @@ def create_figure_generalization(df: pd.DataFrame):
 
 def create_cmc_curves(df: pd.DataFrame):
     """Figure: CMC curves across datasets."""
-    df_fig = df[df["model"] == "resnet50_cbam_center"].dropna(
+    df_fig = df[df["model"] == "resnet50_cbam"].dropna(
         subset=["rank1", "rank5", "rank10"]
     )
 

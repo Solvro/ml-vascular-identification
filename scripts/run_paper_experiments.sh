@@ -7,6 +7,7 @@
 
 # Don't exit on error - continue with next experiment
 set +e
+set -o pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
@@ -15,9 +16,11 @@ cd "$PROJECT_DIR"
 mkdir -p tables
 mkdir -p logs
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+EPOCHS=100
 
 echo "🚀 Starting Paper Experiments"
 echo "📂 Project: $PROJECT_DIR"
+echo "⏱️  Epochs per training: $EPOCHS"
 echo "📊 Results will be saved to: tables/"
 echo "📝 Logs: logs/experiments_${TIMESTAMP}.log"
 echo "============================================================================"
@@ -52,10 +55,11 @@ for config in "${ARCH_CONFIGS[@]}"; do
     uv run src/train.py \
         data=mmcbnu \
         model="$model_name" \
-        trainer.epochs=1 \
-        2>&1 | tee "$LOG_FILE"
+        trainer.epochs=$EPOCHS \
+        loader.num_workers=0 \
+        < /dev/null 2>&1 | tee "$LOG_FILE"
 
-    EXIT_CODE=$?
+    EXIT_CODE=${PIPESTATUS[0]}
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✅ Completed: $model_label"
@@ -87,10 +91,11 @@ for dataset in "${DATASETS[@]}"; do
     timeout 3600 uv run src/train.py \
         data="$dataset" \
         model="$BEST_MODEL" \
-        trainer.epochs=1 \
-        2>&1 | tee "$LOG_FILE"
+        trainer.epochs=$EPOCHS \
+        loader.num_workers=0 \
+        < /dev/null 2>&1 | tee "$LOG_FILE"
 
-    EXIT_CODE=$?
+    EXIT_CODE=${PIPESTATUS[0]}
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✅ Completed: $dataset"
@@ -134,10 +139,11 @@ for loss_config in "${LOSSES[@]}"; do
         data=mmcbnu \
         model=resnet50_cbam_center \
         model.loss.name="$loss_name" \
-        trainer.epochs=1 \
-        2>&1 | tee "$LOG_FILE"
+        trainer.epochs=$EPOCHS \
+        loader.num_workers=0 \
+        < /dev/null 2>&1 | tee "$LOG_FILE"
 
-    EXIT_CODE=$?
+    EXIT_CODE=${PIPESTATUS[0]}
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✅ Completed: $loss_label"
@@ -163,10 +169,11 @@ for dim in "${DIMS[@]}"; do
         data=mmcbnu \
         model=resnet50_cbam_center \
         model.embedding_dim="$dim" \
-        trainer.epochs=1 \
-        2>&1 | tee "$LOG_FILE"
+        trainer.epochs=$EPOCHS \
+        loader.num_workers=0 \
+        < /dev/null 2>&1 | tee "$LOG_FILE"
 
-    EXIT_CODE=$?
+    EXIT_CODE=${PIPESTATUS[0]}
 
     if [ $EXIT_CODE -eq 0 ]; then
         echo "✅ Completed: embedding_dim=$dim"
@@ -186,31 +193,70 @@ echo "════════════════════════�
 echo "📊 SECTION D: K-NN Decision Rule Comparison"
 echo "════════════════════════════════════════════════════════════════════════════"
 
-K_VALUES=("1" "3" "5")
+# 1. Train model ONCE for K=1 (default)
+echo ""
+echo "🔄 Training base model for K-NN experiments (K=1)"
+LOG_FILE="logs/knn_base_train_${TIMESTAMP}.log"
 
-for k in "${K_VALUES[@]}"; do
-    echo ""
-    echo "🔄 Evaluating with k=$k neighbors"
+# Use a specific output dir to easily find the checkpoint
+KNN_OUTPUT_DIR="outputs/knn_experiment/${TIMESTAMP}"
 
-    LOG_FILE="logs/ablation_knn_${k}_${TIMESTAMP}.log"
+uv run src/train.py \
+    data=mmcbnu \
+    model=resnet50_cbam_center \
+    trainer.epochs=$EPOCHS \
+    k_neighbors=1 \
+    hydra.run.dir="$KNN_OUTPUT_DIR" \
+    loader.num_workers=0 \
+    < /dev/null 2>&1 | tee "$LOG_FILE"
 
-    uv run src/train.py \
-        data=mmcbnu \
-        model=resnet50_cbam_center \
-        trainer.epochs=0 \
-        k_neighbors="$k" \
-        2>&1 | tee "$LOG_FILE"
-
-    EXIT_CODE=$?
-
-    if [ $EXIT_CODE -eq 0 ]; then
-        echo "✅ Completed: k=$k"
-        RESULTS["knn_${k}"]="success"
+EXIT_CODE=${PIPESTATUS[0]}
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✅ Base model training completed"
+    RESULTS["knn_1"]="success"
+    
+    # Find the checkpoint (train.py creates nested structure)
+    CHECKPOINT_PATH=$(find "$KNN_OUTPUT_DIR" -name "checkpoint_best.pt" | head -n 1)
+    
+    if [ -n "$CHECKPOINT_PATH" ]; then
+        echo "📍 Checkpoint found: $CHECKPOINT_PATH"
+        
+        # 2. Evaluate for K=3 and K=5 using the trained model
+        K_VALUES=("3" "5")
+        
+        for k in "${K_VALUES[@]}"; do
+            echo ""
+            echo "🔄 Evaluating with k=$k neighbors (using pre-trained model)"
+            
+            LOG_FILE="logs/ablation_knn_${k}_${TIMESTAMP}.log"
+            
+            uv run src/train.py \
+                data=mmcbnu \
+                model=resnet50_cbam_center \
+                trainer.epochs=0 \
+                k_neighbors="$k" \
+                model.checkpoint_path="$CHECKPOINT_PATH" \
+                loader.num_workers=0 \
+                < /dev/null 2>&1 | tee "$LOG_FILE"
+                
+            EXIT_CODE=${PIPESTATUS[0]}
+            
+            if [ $EXIT_CODE -eq 0 ]; then
+                echo "✅ Completed: k=$k"
+                RESULTS["knn_${k}"]="success"
+            else
+                echo "❌ Failed: k=$k (exit code: $EXIT_CODE)"
+                RESULTS["knn_${k}"]="failed"
+            fi
+        done
     else
-        echo "❌ Failed: k=$k (exit code: $EXIT_CODE)"
-        RESULTS["knn_${k}"]="failed"
+        echo "❌ Checkpoint not found in $KNN_OUTPUT_DIR"
+        RESULTS["knn_base"]="failed_no_checkpoint"
     fi
-done
+else
+    echo "❌ Base model training failed (exit code: $EXIT_CODE)"
+    RESULTS["knn_1"]="failed"
+fi
 
 # ============================================================================
 # COLLECT METRICS
@@ -221,7 +267,7 @@ echo "════════════════════════�
 echo "📊 Collecting metrics from all experiments..."
 echo "════════════════════════════════════════════════════════════════════════════"
 
-python3 << 'PYTHON_SCRIPT'
+uv run python << 'PYTHON_SCRIPT'
 import json
 import torch
 from pathlib import Path
@@ -231,6 +277,7 @@ from datetime import datetime
 PROJECT_DIR = Path(".")
 OUTPUTS_DIR = PROJECT_DIR / "outputs"
 TABLES_DIR = PROJECT_DIR / "tables"
+TABLES_DIR.mkdir(exist_ok=True)
 
 print("🔍 Scanning for experiment results...")
 
@@ -239,7 +286,7 @@ results = []
 
 for prototypes_file in OUTPUTS_DIR.rglob("prototypes.pt"):
     try:
-        data = torch.load(prototypes_file, map_location='cpu')
+        data = torch.load(prototypes_file, map_location='cpu', weights_only=False)
         metrics = data.get('metrics', {})
 
         # Extract path info

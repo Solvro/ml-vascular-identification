@@ -1,0 +1,3 @@
+- data=mmcbnu
+- model=attention_unet
+- trainer.epochs=100

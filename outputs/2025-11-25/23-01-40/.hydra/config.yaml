@@ -1,0 +1,49 @@
+name: mmcbnu
+transforms:
+  img_size: 224
+  train: true
+  hflip_p: 0.3
+  normalize: imagenet
+split:
+  train: 0.6
+  val: 0.2
+  test: 0.2
+  seed: 42
+loader:
+  batch_size: 64
+  num_workers: 12
+  pin_memory: true
+  sampler:
+    P: 16
+    K: 4
+trainer:
+  embedding_dim: 512
+  epochs: 100
+  early_stopping:
+    enabled: true
+    patience: 15
+    min_delta: 0.0001
+model:
+  name: unet_embedding
+  type: unet
+  architecture: unet
+  embedding_dim: 512
+  input_channels: 3
+  encoder_depth: 4
+  base_channels: 64
+  dropout: 0.1
+  loss:
+    name: center
+    lambda_center: 0.001
+  optimizer:
+    name: adam
+    lr: 0.0001
+    weight_decay: 0.0005
+mode: openset
+known_ratio: 0.7
+val_ratio: 0.15
+seed: 42
+optimize_threshold: true
+threshold_metric: oscr
+openset_threshold: 0.5
+k_neighbors: 1

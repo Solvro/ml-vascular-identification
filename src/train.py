@@ -519,21 +519,25 @@ def train(cfg: DictConfig) -> None:
     
     # Build loss kwargs from config (flexible for different loss types)
     loss_kwargs = {}
+    
+    # Common parameters
     if hasattr(loss_config, "margin"):
         loss_kwargs["margin"] = loss_config.margin
-    if hasattr(loss_config, "mining"):
-        loss_kwargs["mining"] = loss_config.mining
-    if hasattr(loss_config, "pos_weight"):
-        loss_kwargs["pos_weight"] = loss_config.pos_weight
-    if hasattr(loss_config, "neg_weight"):
-        loss_kwargs["neg_weight"] = loss_config.neg_weight
-    if hasattr(loss_config, "lambda_center"):
-        loss_kwargs["lambda_center"] = loss_config.lambda_center
-    if hasattr(loss_config, "lambda_triplet"):
-        loss_kwargs["lambda_triplet"] = loss_config.lambda_triplet
-    
-    # For center-based losses, need to pass embedding_dim and num_classes
+        
+    # Specific parameters based on loss type
+    if loss_name in ["triplet", "triplet_loss", "triplet_center", "triplet_center_loss"]:
+        if hasattr(loss_config, "mining"):
+            loss_kwargs["mining"] = loss_config.mining
+            
+    if loss_name in ["contrastive", "contrastive_loss"]:
+        if hasattr(loss_config, "pos_weight"):
+            loss_kwargs["pos_weight"] = loss_config.pos_weight
+        if hasattr(loss_config, "neg_weight"):
+            loss_kwargs["neg_weight"] = loss_config.neg_weight
+            
     if loss_name in ["center", "center_loss", "triplet_center", "triplet_center_loss"]:
+        if hasattr(loss_config, "lambda_center"):
+            loss_kwargs["lambda_center"] = loss_config.lambda_center
         loss_kwargs["embedding_dim"] = embedding_dim
         # Use number of known classes (for OpenSet) or total training classes
         if mode == "openset":
@@ -541,6 +545,10 @@ def train(cfg: DictConfig) -> None:
         else:
             # For closed-set, count unique labels in training set
             loss_kwargs["num_classes"] = len(train_loader.dataset.classes) if hasattr(train_loader.dataset, 'classes') else 100
+
+    if loss_name in ["triplet_center", "triplet_center_loss"]:
+        if hasattr(loss_config, "lambda_triplet"):
+            loss_kwargs["lambda_triplet"] = loss_config.lambda_triplet
 
     optimizer_config = getattr(cfg.model, "optimizer", {})
     learning_rate = getattr(optimizer_config, "lr", 3e-4)
@@ -579,6 +587,21 @@ def train(cfg: DictConfig) -> None:
     patience = getattr(early_stopping_config, "patience", 10)
     min_delta = getattr(early_stopping_config, "min_delta", 0.0001)
     
+    # Check for existing checkpoint to load
+    checkpoint_path = getattr(cfg.model, "checkpoint_path", None)
+    if checkpoint_path:
+        from pathlib import Path
+        checkpoint_path = Path(checkpoint_path)
+        if checkpoint_path.exists():
+            print(f"🔄 Loading checkpoint from {checkpoint_path}")
+            checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            if "optimizer_state_dict" in checkpoint and epochs > 0:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            print("✅ Checkpoint loaded successfully")
+        else:
+            print(f"⚠️  Checkpoint path provided but not found: {checkpoint_path}")
+
     if early_stopping_enabled:
         print(f"🛑 Early stopping: patience={patience}, min_delta={min_delta}")
 
@@ -586,7 +609,15 @@ def train(cfg: DictConfig) -> None:
     best_val_loss = float("inf")
     best_epoch = 0
     epochs_without_improvement = 0
-
+    
+    # If epochs=0, skip training (evaluation only)
+    if epochs == 0:
+        print("⏩ Skipping training (epochs=0)")
+        # If we loaded a checkpoint, use its val_loss as best_val_loss
+        if checkpoint_path and 'val_loss' in checkpoint:
+            best_val_loss = checkpoint['val_loss']
+            best_epoch = checkpoint.get('epoch', 0)
+    
     for epoch in range(1, epochs + 1):
         print(f"\n{'='*60}")
         print(f"Epoch {epoch}/{epochs}")
@@ -758,8 +789,7 @@ def train(cfg: DictConfig) -> None:
         }, prototypes_path)
         print(f"\n💾 Saved prototypes and metrics to {prototypes_path}")
         
-        # Plot DET and ROC curves
-        print("\n📊 Generating visualizations...")
+        # Plot DET and ROC curves (skip visualization to avoid matplotlib GUI issues)
         # Need to separate genuine and impostor scores for DET/ROC
         # For simplicity, use known as genuine and unknown as impostor
         genuine_scores = np.array([s for i, s in enumerate(metrics.get('all_similarities', []))
@@ -767,21 +797,20 @@ def train(cfg: DictConfig) -> None:
         impostor_scores = np.array([s for i, s in enumerate(metrics.get('all_similarities', []))
                                     if i >= metrics.get('total_known', 0)])
         
-        # Only plot if we have scores stored
-        if len(genuine_scores) > 0 and len(impostor_scores) > 0:
-            det_curve_path = output_dir / "det_curve.png"
-            roc_curve_path = output_dir / "roc_curve.png"
-            
-            plot_det_curve(genuine_scores, impostor_scores, 
-                          str(det_curve_path),
-                          title=f"DET Curve - {cfg.name}")
-            plot_roc_curve(genuine_scores, impostor_scores,
-                          str(roc_curve_path), 
-                          title=f"ROC Curve - {cfg.name}",
-                          auroc=metrics['auroc'])
+        # Commenting out plotting to avoid issues in headless/batch mode
+        # if len(genuine_scores) > 0 and len(impostor_scores) > 0:
+        #     det_curve_path = output_dir / "det_curve.png"
+        #     roc_curve_path = output_dir / "roc_curve.png"
+        #     
+        #     plot_det_curve(genuine_scores, impostor_scores, 
+        #                   str(det_curve_path),
+        #                   title=f"DET Curve - {cfg.name}")
+        #     plot_roc_curve(genuine_scores, impostor_scores,
+        #                   str(roc_curve_path), 
+        #                   title=f"ROC Curve - {cfg.name}",
+        #                   auroc=metrics['auroc'])
         
         # Save evaluation protocol
-        print("\n📋 Saving evaluation protocol...")
         protocol_config = {
             'dataset_name': cfg.name,
             'total_classes': info.get('total_finger_classes', 600),
@@ -812,10 +841,8 @@ def train(cfg: DictConfig) -> None:
         
         protocol_path = output_dir / "evaluation_protocol.json"
         save_evaluation_protocol(metrics, protocol_config, str(protocol_path))
-        print(f"\n💾 Saved evaluation protocol to {protocol_path}")
     
-    print(f"\n✨ Done!")
-    print(f"📂 All outputs saved to: {output_dir}")
+    print(f"✨ Done! Outputs saved to: {output_dir}")
 
 
 if __name__ == "__main__":
