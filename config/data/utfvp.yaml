@@ -25,3 +25,9 @@ openset:
   val_ratio: 0.15   # 15% of known classes for validation
   enrollment_samples: 4  # UTFVP has 4 samples per finger per session
   test_samples: 2
+  # Split ratios for small dataset: train=50%, val=15%, test_known=20%, unknown=15%
+  # (UTFVP has only ~1444 samples, default 55/10/5/30 leaves insufficient test_known for enrollment)
+  split_ratios:
+    train: 0.50
+    val: 0.15
+    test_known: 0.20

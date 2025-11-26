@@ -1,5 +1,0 @@
-- data=mmcbnu
-- model=resnet50_cbam_center
-- model.loss.name=triplet_center
-- trainer.epochs=100
-- loader.num_workers=0

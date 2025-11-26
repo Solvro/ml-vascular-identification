@@ -1,5 +1,0 @@
-- data=mmcbnu
-- model=resnet50_cbam_center
-- model.embedding_dim=512
-- trainer.epochs=100
-- loader.num_workers=0

@@ -1,3 +1,0 @@
-- data=mmcbnu
-- model=resnet50_cbam_center
-- trainer.epochs=100

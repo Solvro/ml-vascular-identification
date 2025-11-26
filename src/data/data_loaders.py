@@ -384,6 +384,8 @@ def create_openset_data_loaders(
     hflip_p: float = 0.3,
     # Dataset-specific params
     body_part: str = "dorsal",
+    # Split ratios for small datasets (FYO, UTFVP) - dict: {train_ratio, val_ratio, test_known_ratio}
+    split_ratios: dict = None,
 ) -> Tuple[Dict[str, DataLoader], Dict]:
     """Create DataLoaders for OpenSet Recognition with subject-disjoint splits.
 
@@ -512,8 +514,19 @@ def create_openset_data_loaders(
         )
     elif dataset_name == "fyo":
         # FYO: multi-body-part dataset. Use subject-level partition.
+        # Note: FYO has limited data, use custom split ratios (default 50/15/20/15)
         full_dataset = FYODataset(body_part=body_part)
         df = full_dataset.df.copy()
+
+        # Use custom split ratios for small dataset
+        if split_ratios is None:
+            # Default for FYO: more aggressive on test_known to get enough enrollment samples
+            split_ratios = {"train": 0.50, "val": 0.15, "test_known": 0.20}
+
+        train_ratio = split_ratios.get("train", 0.50)
+        val_ratio = split_ratios.get("val", 0.15)
+        test_known_ratio = split_ratios.get("test_known", 0.20)
+        unknown_ratio = 1.0 - train_ratio - val_ratio - test_known_ratio
 
         # Get unique patients and shuffle
         patients = sorted(df["patient_id"].unique().tolist())
@@ -521,9 +534,9 @@ def create_openset_data_loaders(
         rng.shuffle(patients)
 
         n = len(patients)
-        n_train = int(n * 0.55)
-        n_val = int(n * 0.10)
-        n_test_known = int(n * 0.05)
+        n_train = int(n * train_ratio)
+        n_val = int(n * val_ratio)
+        n_test_known = int(n * test_known_ratio)
 
         # Assign patient groups
         val_patients = set(patients[n_train : n_train + n_val])
@@ -565,8 +578,19 @@ def create_openset_data_loaders(
         )
     elif dataset_name == "utfvp":
         # UTFVP: multi-session finger vein dataset. Use subject-level partition.
+        # Note: UTFVP has limited data, use custom split ratios (default 50/15/20/15)
         full_dataset = UTFVPDataset()
         df = full_dataset.df.copy()
+
+        # Use custom split ratios for small dataset
+        if split_ratios is None:
+            # Default for UTFVP: more aggressive on test_known to get enough enrollment samples
+            split_ratios = {"train": 0.50, "val": 0.15, "test_known": 0.20}
+
+        train_ratio = split_ratios.get("train", 0.50)
+        val_ratio = split_ratios.get("val", 0.15)
+        test_known_ratio = split_ratios.get("test_known", 0.20)
+        unknown_ratio = 1.0 - train_ratio - val_ratio - test_known_ratio
 
         # Get unique patients and shuffle
         patients = sorted(df["patient_id"].unique().tolist())
@@ -574,9 +598,9 @@ def create_openset_data_loaders(
         rng.shuffle(patients)
 
         n = len(patients)
-        n_train = int(n * 0.55)
-        n_val = int(n * 0.10)
-        n_test_known = int(n * 0.05)
+        n_train = int(n * train_ratio)
+        n_val = int(n * val_ratio)
+        n_test_known = int(n * test_known_ratio)
 
         # Assign patient groups
         val_patients = set(patients[n_train : n_train + n_val])

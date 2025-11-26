@@ -1,4 +1,0 @@
-- data=dorsal
-- model=resnet50_cbam_center
-- trainer.epochs=100
-- loader.num_workers=0

@@ -1,0 +1,5 @@
+Model,MMCBNU,DORSAL
+attention_unet,0.9905 / 99.4,
+resnet50_cbam,0.9926 / 99.6,0.9304 / 99.4
+simple_cnn,0.9866 / 99.3,
+unet_embedding,0.609 / 73.1,

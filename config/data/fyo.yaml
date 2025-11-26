@@ -28,3 +28,9 @@ openset:
   val_ratio: 0.15
   enrollment_samples: 3  # FYO has Session1 & Session2, so 3 samples reasonable
   test_samples: 2
+  # Split ratios for small dataset: train=50%, val=15%, test_known=20%, unknown=15%
+  # (FYO has only ~320 samples, default 55/10/5/30 leaves insufficient test_known for enrollment)
+  split_ratios:
+    train: 0.50
+    val: 0.15
+    test_known: 0.20
