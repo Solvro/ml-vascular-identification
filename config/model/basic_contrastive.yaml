@@ -1,0 +1,26 @@
+# Basic CNN Model - Contrastive Loss Variant
+# @package model
+
+name: simple_cnn
+type: basic
+architecture: basic_cnn
+
+# Model parameters
+embedding_dim: 384
+input_channels: 3
+dropout: 0.2
+use_attention: false
+
+# Loss configuration - Contrastive loss (pair-wise learning)
+loss:
+  name: contrastive
+  margin: 1.0
+  pos_weight: 1.0
+  neg_weight: 1.0
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.0001
+  weight_decay: 0.0005
+

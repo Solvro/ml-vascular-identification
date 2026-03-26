@@ -1,0 +1,28 @@
+# ResNet-50 with CBAM - TripletCenter Variant (aggressive)
+# @package model
+
+name: resnet50_cbam
+type: resnet_cbam
+architecture: resnet50_cbam
+
+# Model parameters
+embedding_dim: 256
+input_channels: 3
+dropout: 0.5  # Aggressive dropout to prevent overfitting
+depth: 50
+use_cbam: true
+
+# Loss configuration - TripletCenter with optimized weights
+loss:
+  name: triplet_center
+  margin: 0.3
+  mining: hard
+  lambda_triplet: 1.0
+  lambda_center: 0.0005  # Lower center weight
+
+# Optimizer configuration - VERY LOW learning rate for TripletCenter stability
+optimizer:
+  name: adam
+  lr: 0.00003  # Very low for combined loss
+  weight_decay: 0.001  # Aggressive L2 regularization
+

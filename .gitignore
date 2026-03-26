@@ -36,6 +36,8 @@ Thumbs.db
 data/dorsal/*
 data/mmcbnu/*
 data/cache/*
+data/FYO/*
+data/UTFVP/*
 
 # Logs and outputs
 logs/

@@ -30,24 +30,51 @@ class BaseScanner(ABC):
 
 
 class BaseDataset(Dataset, ABC):
-    """Abstract base class for image datasets with common functionality."""
+    """Abstract base class for image datasets with common functionality.
+    
+    Supports both closed-set (patient-level) and open-set (finger-level) recognition.
+    """
 
-    def __init__(self, df, transform=None, label_encoder=None):
+    def __init__(
+        self,
+        df,
+        transform=None,
+        label_encoder=None,
+        use_finger_classes=False,
+    ):
         """Initialize base dataset.
 
         Args:
-            df: Pandas DataFrame with at least ["path", "patient_id"] columns.
+            df: Pandas DataFrame with required columns:
+                - For closed-set: ["path", "patient_id"]
+                - For open-set: ["path", "patient_id", "finger_class_id"]
             transform: Optional callable applied to PIL image.
-            label_encoder: Optional dict {patient_id: int}; built if None.
+            label_encoder: Optional dict {key: int}; built if None.
+            use_finger_classes: If True, use finger_class_id for labels (OpenSet mode).
+                               If False, use patient_id for labels (closed-set mode).
         """
         self.df = df.reset_index(drop=True)
         self.transform = transform
+        self.use_finger_classes = use_finger_classes
 
+        # Determine which identifier to use for labels
+        if use_finger_classes:
+            if "finger_class_id" not in df.columns:
+                raise ValueError(
+                    "use_finger_classes=True requires 'finger_class_id' column"
+                )
+            id_column = "finger_class_id"
+        else:
+            id_column = "patient_id"
+
+        # Build label encoder
         if label_encoder is None:
-            pids = sorted(self.df["patient_id"].unique().tolist())
-            self.le = {pid: i for i, pid in enumerate(pids)}  # contiguous labels
+            ids = sorted(self.df[id_column].unique().tolist())
+            self.le = {id_val: i for i, id_val in enumerate(ids)}  # contiguous labels
         else:
             self.le = label_encoder
+
+        self.id_column = id_column
 
     def __len__(self):
         """Return number of samples."""
@@ -68,7 +95,10 @@ class BaseDataset(Dataset, ABC):
         if self.transform:
             img = self.transform(img)
 
-        label = self.le[row["patient_id"]]
+        # Get label based on mode (finger_class_id for OpenSet, patient_id for closed-set)
+        label_key = row[self.id_column]
+        label = self.le[label_key]
+        
         metadata = self._get_metadata(row)
 
         return img, label, metadata
@@ -92,6 +122,62 @@ class BaseDataset(Dataset, ABC):
     def get_samples_by_patient(self, patient_id):
         """Get all samples for a specific patient."""
         return self.df[self.df["patient_id"] == patient_id]
+    
+    def get_finger_classes(self):
+        """Get unique finger class IDs in the dataset (for OpenSet mode).
+        
+        Returns:
+            List of finger_class_id strings, or empty list if column doesn't exist.
+        """
+        if "finger_class_id" in self.df.columns:
+            return self.df["finger_class_id"].unique().tolist()
+        return []
+    
+    def get_samples_by_finger_class(self, finger_class_id):
+        """Get all samples for a specific finger class.
+        
+        Args:
+            finger_class_id: Finger class identifier (e.g., 'mmcbnu_001_L_Fore').
+            
+        Returns:
+            DataFrame subset with all samples for this finger class.
+        """
+        if "finger_class_id" not in self.df.columns:
+            raise ValueError("Dataset does not have 'finger_class_id' column")
+        return self.df[self.df["finger_class_id"] == finger_class_id]
+    
+    def filter_by_openset_split(self, split: str):
+        """Create a new dataset filtered by openset_split ('known' or 'unknown').
+        
+        Args:
+            split: Either 'known' or 'unknown'.
+            
+        Returns:
+            New dataset instance with filtered DataFrame.
+        """
+        if "openset_split" not in self.df.columns:
+            raise ValueError("Dataset does not have 'openset_split' column")
+        
+        if split not in ["known", "unknown"]:
+            raise ValueError(f"split must be 'known' or 'unknown', got '{split}'")
+        
+        filtered_df = self.df[self.df["openset_split"] == split].copy().reset_index(drop=True)
+        
+        # Create new instance with same type and settings
+        return self.__class__(
+            df=filtered_df,
+            transform=self.transform,
+            label_encoder=self.le,
+            use_finger_classes=self.use_finger_classes,
+        )
+    
+    def get_num_classes(self):
+        """Get number of unique classes in the dataset.
+        
+        Returns:
+            Number of unique classes (finger classes or patients depending on mode).
+        """
+        return len(self.le)
 
 
 def build_manifest_cache(

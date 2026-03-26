@@ -9,9 +9,22 @@ transforms:
   train: true
   hflip_p: 0.5
   normalize: imagenet  # imagenet | none
+  # ROI extraction for dorsal hand vein images
+  roi_extraction: true  # Enable ROI extraction from full hand images
+  roi_method: "otsu"    # otsu | adaptive | percentile
 
 split:
   train: 0.7
   val: 0.15
   test: 0.15
   seed: 1337
+
+# OpenSet settings tuned for dorsal (hand-level, few-shot per hand)
+openset:
+  enrollment_samples: 2
+  test_samples: 1
+  # Subject-level partition fractions (by patient):
+  # train_known: 0.55, val_known: 0.10, test_known: 0.05, unknown: 0.30
+  train_known_frac: 0.55
+  val_known_frac: 0.10
+  test_known_frac: 0.05

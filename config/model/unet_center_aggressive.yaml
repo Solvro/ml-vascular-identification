@@ -1,0 +1,28 @@
+# U-Net Model - Triplet Center Loss Variant (aggressive)
+# @package model
+
+name: unet_embedding
+type: unet
+architecture: unet
+
+# Model parameters
+embedding_dim: 512
+input_channels: 3
+encoder_depth: 4
+base_channels: 64
+dropout: 0.1
+
+# Loss configuration - Aggressive triplet_center (more center loss weight)
+loss:
+  name: triplet_center
+  margin: 0.3
+  mining: hard
+  lambda_triplet: 0.5
+  lambda_center: 0.005  # Stronger center regularization
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.0001
+  weight_decay: 0.0005
+

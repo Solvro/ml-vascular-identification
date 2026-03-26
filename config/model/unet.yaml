@@ -1,0 +1,25 @@
+# U-Net Model Configuration
+# @package model
+
+name: unet_embedding
+type: unet
+architecture: unet
+
+# Model parameters
+embedding_dim: 512
+input_channels: 3
+encoder_depth: 4
+base_channels: 64
+dropout: 0.1
+
+# Loss configuration - Center loss for tight clustering (UNet encoder already learns good features)
+loss:
+  name: center
+  lambda_center: 0.001
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.0001
+  weight_decay: 0.0005
+

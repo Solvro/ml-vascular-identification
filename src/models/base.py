@@ -96,8 +96,8 @@ def create_model(model_name: str, **kwargs) -> BaseEmbeddingModel:
     """
     # Import here to avoid circular imports
     from .basic import SimpleEmbeddingModel
+    from .resnet_cbam import ResNet50CBAM, ResNetCBAM
     from .unet import AttentionUNet, UNetEmbedding
-    from .visual_trasformer import DeiTEmbedding, VisionTransformerEmbedding
 
     models = {
         # Basic CNN models
@@ -106,9 +106,9 @@ def create_model(model_name: str, **kwargs) -> BaseEmbeddingModel:
         # U-Net models
         "unet_embedding": UNetEmbedding,
         "attention_unet": AttentionUNet,
-        # Vision Transformer models
-        "vit_embedding": VisionTransformerEmbedding,
-        "deit_embedding": DeiTEmbedding,
+        # ResNet with CBAM models
+        "resnet_cbam": ResNetCBAM,
+        "resnet50_cbam": ResNet50CBAM,
     }
 
     if model_name not in models:
@@ -132,13 +132,17 @@ def create_loss(loss_name: str, **kwargs) -> BaseLoss:
         ValueError: If loss_name is not recognized.
     """
     # Import here to avoid circular imports
-    from .losses import ContrastiveLoss, TripletLoss
+    from .losses import CenterLoss, ContrastiveLoss, TripletCenterLoss, TripletLoss
 
     losses = {
         "triplet": TripletLoss,
         "triplet_loss": TripletLoss,  # alias
         "contrastive": ContrastiveLoss,
         "contrastive_loss": ContrastiveLoss,  # alias
+        "center": CenterLoss,
+        "center_loss": CenterLoss,  # alias
+        "triplet_center": TripletCenterLoss,
+        "triplet_center_loss": TripletCenterLoss,  # alias
     }
 
     if loss_name not in losses:

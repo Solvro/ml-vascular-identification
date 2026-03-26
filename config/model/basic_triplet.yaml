@@ -1,0 +1,25 @@
+# Basic CNN Model - Triplet Loss Baseline
+# @package model
+
+name: simple_cnn
+type: basic
+architecture: basic_cnn
+
+# Model parameters
+embedding_dim: 384
+input_channels: 3
+dropout: 0.2
+use_attention: false
+
+# Loss configuration - Standard triplet loss (baseline)
+loss:
+  name: triplet
+  margin: 0.3
+  mining: hard
+
+# Optimizer configuration
+optimizer:
+  name: adam
+  lr: 0.0001
+  weight_decay: 0.0005
+

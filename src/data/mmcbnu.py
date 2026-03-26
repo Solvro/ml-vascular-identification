@@ -30,7 +30,7 @@ class MMCBNUScanner(BaseScanner):
             root: Root directory of the MMCBNU dataset.
 
         Returns:
-            DataFrame with columns: ['path', 'patient_id', 'finger', 'dataset'].
+            DataFrame with columns: ['path', 'patient_id', 'finger', 'finger_class_id', 'dataset'].
         """
         rows = []
         root = Path(root)
@@ -49,6 +49,10 @@ class MMCBNUScanner(BaseScanner):
             for finger_dir in pid_dir.iterdir():
                 if not finger_dir.is_dir():
                     continue
+                finger_name = finger_dir.name
+                # Create unique finger class ID: dataset_patientID_finger
+                finger_class_id = f"mmcbnu_{pid}_{finger_name}"
+                
                 for f in finger_dir.iterdir():
                     if f.suffix.lower() not in [".bmp", ".png", ".jpg", ".jpeg"]:
                         continue
@@ -56,7 +60,8 @@ class MMCBNUScanner(BaseScanner):
                         {
                             "path": str(f),
                             "patient_id": pid,
-                            "finger": finger_dir.name,
+                            "finger": finger_name,
+                            "finger_class_id": finger_class_id,
                             "dataset": "mmcbnu",
                         }
                     )
@@ -94,13 +99,25 @@ class MMCBNUDataset(BaseDataset):
             row: Pandas Series representing one sample.
 
         Returns:
-            dict: Metadata with finger information.
+            dict: Metadata with finger and OpenSet information.
         """
-        return {
-            "finger": row["finger"],
+        metadata = {
+            "finger_class_id": row["finger_class_id"],
             "patient_id": row["patient_id"],
+            "finger": row["finger"],
+            "dataset": row["dataset"],
             "path": row["path"],
         }
+        
+        # Add openset_split if available
+        if "openset_split" in row:
+            metadata["openset_split"] = row["openset_split"]
+        
+        # Add sample_split if available (for enrollment/test)
+        if "sample_split" in row:
+            metadata["sample_split"] = row["sample_split"]
+            
+        return metadata
 
     def get_fingers(self):
         """Get unique finger types in the dataset."""

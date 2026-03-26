@@ -18,6 +18,9 @@ dependencies = [
     "pyarrow>=10.0.0", # for parquet files
     "hydra-core>=1.3.2",
     "omegaconf>=2.3.0",
+    "scikit-learn>=1.0.0", # for metrics computation
+    "matplotlib>=3.5.0", # for visualization
+    "opencv-python>=4.5.0", # for image processing and ROI extraction
 ]
 
 [project.optional-dependencies]
@@ -26,6 +29,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "pre-commit>=3.0.0",
     "ruff>=0.1.0",
+    "seaborn>=0.13.0",
 ]
 config = [
     "hydra-core>=1.3.0",
@@ -91,6 +95,9 @@ addopts = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:torch.utils.data._utils.pin_memory",
 ]
 
 # Coverage configuration

@@ -1,0 +1,27 @@
+# @package _global_
+defaults:
+  - _self_
+
+name: "utfvp"
+
+transforms:
+  img_size: 256
+  train: true
+  hflip_p: 0.5
+  normalize: imagenet  # imagenet | none
+  # No ROI extraction needed - UTFVP images are clean finger vein captures
+  roi_extraction: false
+  roi_method: "otsu"
+
+split:
+  train: 0.7
+  val: 0.15
+  test: 0.15
+  seed: 42
+
+# OpenSet settings for UTFVP (60 subjects, 6 fingers, 2 sessions)
+openset:
+  known_ratio: 0.7  # ~42 subjects as known, ~18 as unknown
+  val_ratio: 0.15   # 15% of known classes for validation
+  enrollment_samples: 4  # UTFVP has 4 samples per finger per session
+  test_samples: 2

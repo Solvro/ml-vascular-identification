@@ -15,31 +15,53 @@ class BalancedBatchSampler(Sampler):
 
     This is useful for metric learning where you want each batch to contain
     multiple examples from the same classes for computing triplet/contrastive losses.
+    
+    Default P=16, K=4 for OpenSet recognition with larger number of finger classes.
     """
 
-    def __init__(self, labels: List[int], P: int, K: int):
+    def __init__(
+        self,
+        labels: List[int],
+        P: int = 16,
+        K: int = 4,
+        min_samples_per_class: int = None,
+    ):
         """Initialize sampler.
 
         Args:
             labels: List of integer class labels for all samples.
-            P: Number of distinct classes per batch.
-            K: Number of samples per class in each batch.
+            P: Number of distinct classes per batch (default 16 for OpenSet).
+            K: Number of samples per class in each batch (default 4).
+            min_samples_per_class: If set, only include classes with >= this many samples.
+                                  Classes with fewer samples are excluded.
 
         Note:
             If a class has fewer than K samples, sampling will be done with replacement.
         """
         self.labels = [int(y) for y in labels]
         self.P, self.K = int(P), int(K)
+        self.min_samples_per_class = min_samples_per_class
 
         # Map class -> list of sample indices
         self.index_by_class = defaultdict(list)
         for i, y in enumerate(self.labels):
             self.index_by_class[y].append(i)
 
+        # Filter classes if min_samples_per_class is set
+        if min_samples_per_class is not None:
+            self.index_by_class = {
+                cls: indices
+                for cls, indices in self.index_by_class.items()
+                if len(indices) >= min_samples_per_class
+            }
+
         self.classes = list(self.index_by_class.keys())
 
         if len(self.classes) < self.P:
-            raise ValueError(f"Not enough classes ({len(self.classes)}) for P={self.P}")
+            raise ValueError(
+                f"Not enough classes ({len(self.classes)}) for P={self.P}. "
+                f"Consider reducing P or min_samples_per_class."
+            )
 
     def __iter__(self) -> Iterator[List[int]]:
         """Iterate over batches of indices.
@@ -97,10 +119,13 @@ class BalancedBatchSampler(Sampler):
             "K": self.K,
             "batch_size": self.P * self.K,
             "batches_per_epoch": len(self),
-            "min_class_size": min(class_sizes.values()),
-            "max_class_size": max(class_sizes.values()),
-            "avg_class_size": sum(class_sizes.values()) / len(class_sizes),
+            "min_class_size": min(class_sizes.values()) if class_sizes else 0,
+            "max_class_size": max(class_sizes.values()) if class_sizes else 0,
+            "avg_class_size": sum(class_sizes.values()) / len(class_sizes)
+            if class_sizes
+            else 0,
             "classes_with_replacement": sum(
                 1 for size in class_sizes.values() if size < self.K
             ),
+            "min_samples_per_class": self.min_samples_per_class,
         }

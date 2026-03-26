@@ -1,8 +1,8 @@
 # Data loading
 batch_size: 64
-num_workers: 4
+num_workers: 12  # Reduced from 4 to avoid deadlocks
 pin_memory: true
 
 sampler:
-  P: 8    # Number of classes (patients) per batch
+  P: 16    # Number of classes (patients) per batch
   K: 4    # Number of samples per class
